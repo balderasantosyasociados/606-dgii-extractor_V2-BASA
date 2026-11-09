@@ -1,0 +1,1330 @@
+
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head id="ctl00_Head1"><title>
+	OFV - Consultar mis Envios
+</title>
+  <meta http-equiv="X-UA-Compatible" content="IE=9; IE=10; IE=11; IE=EDGE" /><link href="/OFV/Estilos/Base.css?v=1" rel="stylesheet" type="text/css" /><link href="/OFV/Estilos/dgiiClientStyle.css?v=1" rel="stylesheet" type="text/css" /><link href="/OFV/Estilos/colorbox/colorbox.css" rel="stylesheet" media="screen" /><link href="/OFV/Estilos/css.css?v=4" rel="stylesheet" type="text/css" /><link href="/OFV/Estilos/styletopmenu.css" rel="stylesheet" type="text/css" /><link href="/OFV/Estilos/nmenu.css?v=1" rel="stylesheet" type="text/css" />
+
+  <script src="/OFV/Scripts/json2.js" type="text/javascript"></script>
+  <script src="/OFV/Scripts/jquery.min.js?v=1.10.2" type="text/javascript"></script>
+  <script src="/OFV/Estilos/colorbox/jquery.colorbox.js?v=1.6" type="text/javascript"></script>
+  <script src="/OFV/Scripts/scripttopmenu.js" type="text/javascript"></script>
+  <link href="/OFV/Estilos/bootstrap.min.css?v=1" rel="stylesheet" />
+  <script src="/OFV/Scripts/bootstrap.min.js" type="text/javascript"></script>
+
+
+  <!--[if lt IE 9]>
+	        <style type="text/css">
+             #logo {
+            background: url(/OFV/images/logo.jpg) no-repeat 0px !important;
+        }
+            </style>
+        <![endif]-->
+
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-HSJEH522JS" type="text/javascript"></script>
+  <script type="text/javascript">
+    window.dataLayer = window.dataLayer || [];
+    function gtag() { dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-HSJEH522JS'); // Google Analytics Measurement ID    
+  </script>
+  <script type="text/javascript">
+    function ExpandContract(name) {
+      if (document.getElementById(name).style.display == 'none') {
+        document.getElementById(name).style.display = '';
+      }
+      else {
+        document.getElementById(name).style.display = 'none';
+      }
+    }
+
+
+    function helpForm() {
+      var attribs, url, wLeft, wWidth, theForm, windowHelpdgi;
+
+      theForm = window.document.location.href.toString().toLowerCase();
+      theForm = theForm.substr(theForm.lastIndexOf('ofv/') + 4);
+      theForm = theForm.substr(0, theForm.lastIndexOf('.aspx'));
+
+      if (theForm == '') {
+        theForm = '/ofv/ayudas/index_ayudas.aspx?frhelp=/ofv/ayudas/login.htm';
+      }
+      else {
+        theForm = '/ofv/ayudas/index_ayudas.aspx?frhelp=/ofv/ayudas/' + theForm + '.htm';
+      }
+      wWidth = 500;
+      wLeft = (screen.availWidth - wWidth) - 20;
+      attribs = 'toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=no,width=' + wWidth + ',height=400,left=' + wLeft + ',top=0';
+      url = theForm;
+      windowHelpdgi = window.open(url, 'helpdgii', attribs);
+      windowHelpdgi.focus();
+      return;
+    }
+
+    if (window.location != window.parent.location) {
+      parent.document.location.href = "/OFV/login.aspx";
+    }
+  </script>
+  <script type="text/javascript">
+    var Score = parseFloat(5.00);
+
+    $(document).ready(function () {
+      for (i = 0; i < 3; i++) {
+        $("#alert").fadeOut(500);
+        $("#alert").fadeIn(1000);
+      }
+
+      $(".linkScoring").on('click', function (e) {
+        $.ajax({
+          type: "POST",
+          url: "/OFV/Home.aspx/CargarPaginaScoring",
+          contentType: "application/json; charset=utf-8",
+          dataType: "json",
+          success: function (r) {
+            if (r.d.startsWith("Error:")) {
+              // Maneja el error de manera adecuada, por ejemplo, mostrando un mensaje al usuario
+              alert(r.d);
+            } else {
+              // Abre la URL en una nueva pestaña
+              window.open(r.d.toString(), '_blank');
+            }
+          },
+          error: function (xhr, status, error) {
+            // Maneja errores en la solicitud AJAX
+            console.error("Error en la solicitud AJAX: " + status + " - " + error);
+            alert("Ocurrió un error al intentar cargar la página de scoring.");
+          }
+        });
+      });
+
+      if (Score > 0) {
+        $(".divJuridico_Rating").attr("hidden", false)
+        $(".divScores").attr('style', 'width:' + CalcularWidth(Score, 160));
+      }
+      else {
+        $(".divJuridico_Rating").hide();
+      }
+    });
+
+
+    function CalcularWidth(porcentaje, valorAncho) {
+      var valor = parseFloat(porcentaje);
+      var width = "0px";
+      if (porcentaje != null) {
+        var rating = (valorAncho * valor) / 5;
+        width = `${rating}px`;
+      }
+      return width;
+    }
+
+  </script>
+
+  <style type="text/css">
+    .containers > * {
+      position: absolute;
+    }
+
+    .containers, .crop {
+      height: 38px;
+    }
+
+    .crop {
+      overflow: hidden;
+    }
+
+    .divJuridico_Rating {
+      margin-top: -38px;
+      margin-left: 445px;
+    }
+
+    .tituloScoring {
+      float: right;
+      margin-right: -382px;
+      margin-top: -7px;
+      color: white;
+      font-size: 19px;
+      font-family: ARIA !important;
+    }
+  </style>
+  <style type="text/css" media="print">
+    .btnImprimir {
+      display: none;
+    }
+
+    .hideprint {
+      display: none !important;
+    }
+  </style>
+
+  
+  <link href="../Estilos/jquery.dataTables.min.css" rel="stylesheet" type="text/css" />
+  <link href="../Estilos/buttons.dataTables.min.css" rel="stylesheet" type="text/css" />
+  <script src="../Scripts/jquery.dataTables.min.js" type="text/javascript"></script>
+  <script src="../Scripts/dataTables.buttons.min.js" type="text/javascript"></script>
+  <script src="../Scripts/buttons.flash.min.js" type="text/javascript"></script>
+  <script src="../Scripts/jszip.min.js" type="text/javascript"></script>
+  <script src="../Scripts/buttons.html5.min.js" type="text/javascript"></script>
+  <script src="../Scripts/buttons.print.min.js" type="text/javascript"></script>
+  <script type="text/javascript">
+
+    function GETDetailVal(sec) {
+      $.ajax({
+        type: "POST",
+        contentType: "application/json",
+        data: "{'pSecuencia':" + sec + "}",
+        dataType: "json",
+        url: "Envios606.aspx/GETDetailVal",
+        success: function (data) {
+          var parsed = JSON.parse(data.d);
+          var myDataTable = $("#my-datatable").html("<table class='table' width='100%'><thead><tr class='success'><th>LINEA</th><th>DESCRIPCION</th><th>DATO VALIDADO</th></tr></thead><tbody></tbody></table>");
+          $("#myModalLabel").html("Detalle Validación");
+          $("table", myDataTable).DataTable({
+            retrieve: true,
+            dom: 'Bfrtip',
+            buttons: ['excel', 'print'],
+            "lengthMenu": [[10], [10]],
+            "aaData": parsed,
+            "aoColumns": [
+          { "mData": "LINEA_NUMERO" },
+          { "mData": "DESCRIPCION_ERROR" },
+          { "mData": "DATO_VALIDADO" }
+            ]
+          });
+
+          $('#myModal').modal();
+        },
+        error: function (data) {
+          alert('ha ocurrido un error');
+        }
+      });
+    }
+ 
+    function GETDetailResumen(sec) {
+      $.ajax({
+        type: "POST",
+        contentType: "application/json",
+        data: "{'pSecuencia':" + sec + "}",
+        dataType: "json",
+        url: "Envios606.aspx/GETDetailResumen",
+        success: function (data) {
+          $("#myModalLabel").html("Resúmen del Envío");
+          $("#my-datatable").html(data.d);
+          $('#myModal').modal();
+        },
+        error: function (data) {
+          alert('ha ocurrido un error');
+        }
+      });
+    }
+            
+  </script>
+  <style type="text/css">
+    .bloque-estados {
+      width: 99%;
+      padding: 15px;
+      display: block;
+      color: #272727;
+      background-color: #dff2ff;
+    }
+
+    .mrgbottom2x {
+      margin-bottom: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div id="getsat-widget-7022">
+  </div>
+  <form name="aspnetForm" method="post" action="./Envios606.aspx" id="aspnetForm">
+<div>
+<input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+<input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+<input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="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" />
+</div>
+
+<script type="text/javascript">
+//<![CDATA[
+var theForm = document.forms['aspnetForm'];
+if (!theForm) {
+    theForm = document.aspnetForm;
+}
+function __doPostBack(eventTarget, eventArgument) {
+    if (!theForm.onsubmit || (theForm.onsubmit() != false)) {
+        theForm.__EVENTTARGET.value = eventTarget;
+        theForm.__EVENTARGUMENT.value = eventArgument;
+        theForm.submit();
+    }
+}
+//]]>
+</script>
+
+
+<script src="/Ofv/WebResource.axd?d=gk8_BA3rrkmB4-HRr4J_i94i8TC8oo5XnbJwwsovlkQHdiiu4j4iPbQzXSEGenRVBJo8C0fBjIgMGMOQbPpTEFvWINc1&amp;t=638628080640000000" type="text/javascript"></script>
+
+<script type='text/javascript'>var tiempoInactivo = 30; var tiempoPreAlerta =2;</script>
+<script src="/OFV/Scripts/TimeOut.js?02" type="text/javascript"></script>
+<script src="/Ofv/ScriptResource.axd?d=7StFnfKEepFwmyagowAScaBg7iY2J2XzeXTbkNwE7ZUQ3qrlUMobSwZAdV0QC-mCA6BYxhWPykxMghf3lD-4irE-1o_q-PrUKYhZRuFFEJVQ5Iapdx3Mh04MXj3JIhTHjug5HziJxbF52sSlC_N-Zg65DuZE_MQYO7A5DFdT2ZydqhVO0&amp;t=2a9d95e3" type="text/javascript"></script>
+<script src="/Ofv/ScriptResource.axd?d=qsaB7ZdszZrtv7NVlYFu9e7RE1I30AdIqq-eQoJPPKFeExUyFahZiEKK47X-q95fyX0AQ7S3yW67njf-p2eYMAOxdtmKkE0xMwIIj3eSrMy_xxN7gVyWisy15jF8IYZAPwV7jkTsJLJ6_9DUUfycnw7vK-foUCtdN0LzTpEkk1vGvphZ0&amp;t=2a9d95e3" type="text/javascript"></script>
+<script type="text/javascript">
+//<![CDATA[
+var PageMethods = function() {
+PageMethods.initializeBase(this);
+this._timeout = 0;
+this._userContext = null;
+this._succeeded = null;
+this._failed = null;
+}
+PageMethods.prototype = {
+_get_path:function() {
+ var p = this.get_path();
+ if (p) return p;
+ else return PageMethods._staticInstance.get_path();},
+GETDetailVal:function(pSecuencia,succeededCallback, failedCallback, userContext) {
+return this._invoke(this._get_path(), 'GETDetailVal',false,{pSecuencia:pSecuencia},succeededCallback,failedCallback,userContext); },
+GETDetailResumen:function(pSecuencia,succeededCallback, failedCallback, userContext) {
+return this._invoke(this._get_path(), 'GETDetailResumen',false,{pSecuencia:pSecuencia},succeededCallback,failedCallback,userContext); }}
+PageMethods.registerClass('PageMethods',Sys.Net.WebServiceProxy);
+PageMethods._staticInstance = new PageMethods();
+PageMethods.set_path = function(value) { PageMethods._staticInstance.set_path(value); }
+PageMethods.get_path = function() { return PageMethods._staticInstance.get_path(); }
+PageMethods.set_timeout = function(value) { PageMethods._staticInstance.set_timeout(value); }
+PageMethods.get_timeout = function() { return PageMethods._staticInstance.get_timeout(); }
+PageMethods.set_defaultUserContext = function(value) { PageMethods._staticInstance.set_defaultUserContext(value); }
+PageMethods.get_defaultUserContext = function() { return PageMethods._staticInstance.get_defaultUserContext(); }
+PageMethods.set_defaultSucceededCallback = function(value) { PageMethods._staticInstance.set_defaultSucceededCallback(value); }
+PageMethods.get_defaultSucceededCallback = function() { return PageMethods._staticInstance.get_defaultSucceededCallback(); }
+PageMethods.set_defaultFailedCallback = function(value) { PageMethods._staticInstance.set_defaultFailedCallback(value); }
+PageMethods.get_defaultFailedCallback = function() { return PageMethods._staticInstance.get_defaultFailedCallback(); }
+PageMethods.set_enableJsonp = function(value) { PageMethods._staticInstance.set_enableJsonp(value); }
+PageMethods.get_enableJsonp = function() { return PageMethods._staticInstance.get_enableJsonp(); }
+PageMethods.set_jsonpCallbackParameter = function(value) { PageMethods._staticInstance.set_jsonpCallbackParameter(value); }
+PageMethods.get_jsonpCallbackParameter = function() { return PageMethods._staticInstance.get_jsonpCallbackParameter(); }
+PageMethods.set_path("Envios606.aspx");
+PageMethods.GETDetailVal= function(pSecuencia,onSuccess,onFailed,userContext) {PageMethods._staticInstance.GETDetailVal(pSecuencia,onSuccess,onFailed,userContext); }
+PageMethods.GETDetailResumen= function(pSecuencia,onSuccess,onFailed,userContext) {PageMethods._staticInstance.GETDetailResumen(pSecuencia,onSuccess,onFailed,userContext); }
+//]]>
+</script>
+
+<div>
+
+	<input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="F210CC58" />
+</div>
+    <script type="text/javascript">
+//<![CDATA[
+Sys.WebForms.PageRequestManager._initialize('ctl00$ScriptManager1', 'aspnetForm', [], [], [], 90, 'ctl00');
+//]]>
+</script>
+
+    <div id="contenidobg">
+      <div id="contenedor">
+        <div id="cabecera">
+          <div id="alto">
+            <div id="logo">
+              <a href="/OFV/home.aspx">
+                <img height="69" src="/ofv/estilos/imagenes/spacer.gif" border="0" alt="" />
+              </a>
+            </div>
+            <div id="minimenu">
+              
+              <div id="opciones">
+                <ul class="menutop hideprint" id="menus">
+                  <li><a href="/OFV/home.aspx" class="menulink">INICIO</a></li>
+                  <li><a href="/OFV/informacionusuario.aspx" class="menulink">MI CUENTA</a></li>
+                  <li><a href="/OFV/msgNotificaciones.aspx" class="menulink">BUZON</a>  </li>
+                  <li><a href="/OFV/FormularioSolicitudCitas/SolicitudCitas.aspx" class="menulink">CITAS</a>
+                    
+                    <li><a class="menulink" href="/OFV/seguridad/dgiiLogout.aspx">SALIR</a></li>
+                </ul>
+                <script type="text/javascript">
+                  var menus = new menu.dd("menus");
+                  menus.init("menus", "menuhover");
+                </script>
+              </div>
+            </div>
+            <div class="divJuridico_Rating" hidden="hidden">
+              <div class="containers linkScoring" style="margin-left: 326px;">
+                <img src="../imagenes/rating_nocolor.png" width="160" height="35" />
+                <div id="ctl00_divScore" class="crop divScores">
+                  <a>
+                    <img src="../imagenes/rating_colored.png" width="160" height="35" /></a>
+                </div>
+              </div>
+              <label class="tituloScoring">Scoring Tributario</label>
+            </div>
+          </div>
+
+          <div class="limpiar"></div>
+          <div style="width: 100%; border-top: 1px solid #dadada; border-bottom: 1px solid #dadada;">
+            <table style="width: 100%; margin: 7px">
+              <tr>
+                <td style="width: 9%; vertical-align: top">
+                  <font color="#333" face="Verdana, Arial, Helvetica, sans-serif">
+                    Razón Social
+                  </font>
+                  </td>
+                  <td style="width: 58%; vertical-align: top">
+                    <font color="#333" face="Verdana, Arial, Helvetica, sans-serif">
+                      <b>
+                        JR TAVERAS PUERTAS VENTANAS & MAS SRL
+                      </b>
+                    </font>
+                </td>
+                <td style="width: 15%; vertical-align: middle">
+                  RNC
+                  <font color="#333" face="Verdana, Arial, Helvetica, sans-serif">
+                    <b>
+                      133490331
+                    </b>
+                  </font>
+                </td>
+                <td style="width: 18%; vertical-align: middle; font-size: xx-small">
+                  <font color="#333" face="verdana">
+                    09/11/2026 07:31:57 PM
+                  </font>&nbsp;
+                    [03]
+                </td>
+              </tr>
+            </table>
+          </div>
+        </div>
+        <div class="limpiar"></div>
+        <span class="texto negrita enlace ">
+          <div id='barra2' style='margin-top: 5px; margin-bottom: 20px; width: 100%; height: 1px;'> <div id='alert'><a href='/OFV/msgNotificaciones.aspx?frm=lnk'><div style='margin-top: -2px; float: left;'><img style='border-image: none; width: 26px; height: 20px;' src='/OFV/Estilos/imagenes/alerta.jpg' style='border:none' /> </div> <div style='margin-top: 0px; margin-left: 4px; float: left'>Usted tiene 47 mensaje(s) sin leer. Pulse aqu&iacute; para verlo(s).</div></a></div></div>
+        </span>
+        <div class="limpiar"></div>
+        
+        <div id="barra_izquierda">
+            <div class="limpiar"></div>
+            <div id="content_barra_izquierda">
+                
+                <div id="menuv">
+                    
+<script type="text/javascript">
+  var req;
+  function movein(which) {
+  }
+  function moveout(which) {
+  }
+  function mostrarOcultar(nomctl) {
+    var prev = document.getElementById("_txtOpcion").value;
+    if ((prev != '') && (nomctl != prev)) {
+      var oldctl = document.getElementById(prev);
+      oldctl.style.display = "none";
+    }
+    var ctl = document.getElementById(nomctl)
+    ctl.style.display = (ctl.style.display == "none" ? "" : "none");
+  }
+</script>
+<input id="_txtOpcion" type="hidden" value="" />
+<table id="tablaMenu" width="100%" border="0" valign="top" cellpadding="0" cellspacing="1">
+  <tr>
+    <td class="menuGrupo">
+      <div href="#" onClick="
+            mostrarOcultar(2185)
+          ">Menu Oficina Virtual</div>
+    </td>
+  </tr>
+  <tr>
+    <td>
+      <div style="display: none; width: 100%;" id="2185">
+        <table style="width: 100%;" class="menuTabla">
+          <tr>
+            <td width="100%">
+              <table style="width: 100%;" border="0">
+                <tr>
+                  <td class="tdheader" onClick="
+                ExpandContract('2186');
+              ">Declaraciones Juradas</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr id="2186">
+            <td>
+              <table width="100%" cellpadding="1" cellspacing="1">
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Documentos/DatosBasicos.aspx'
+        " id="2189">Declaración Interactiva</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/Ofv/Dec_IR3/DeclaracionIR3.aspx'
+        " id="2398">Declaración IR-3</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Utilidades/DeclaracionesInformativas.aspx'
+        " id="2187">Declaraciones en Cero</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/DecHID/DeclaracionHID.aspx'
+        " id="2439">Declaración Hidrocarburos</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Empleadores/ConsultaRetencionAsalariados.aspx'
+        " id="2239">Declaración IR-13</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Documentos/DatosRectificados.aspx'
+        " id="2597">Declaraciones Rectificativas</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/DIOR/InfoContrib.aspx'
+        " id="2604">DIOR</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Documentos/DeclaracionRST.aspx'
+        " id="2684">Declaracion RST</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/Documentos/DeclaracionesG_PD.aspx'
+        " id="2769">Declaración Contribución GLP</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/DIOR/PreciosTransferencia/EnviosReportesPT.aspx'
+        " id="3344">Envios Complementarios</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td width="100%">
+              <table style="width: 100%;" border="0">
+                <tr>
+                  <td class="tdheader" onClick="
+                ExpandContract('2591');
+              ">Solicitudes</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr id="2591">
+            <td>
+              <table width="100%" cellpadding="1" cellspacing="1">
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/comprobantes/CF_Solicitar_Comprobante_N.aspx'
+        " id="2626">Comprobantes Fiscales</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/RegistroNacionalContribuyentes/Certificaciones/SolicitudCertificacion.aspx'
+        " id="2209">Solicitar Certificación</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/Tramites/Solicitudestrk.aspx'
+        " id="2582">Solicitar Tramites</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/CCContribuyente/PagoaCuenta.aspx'
+        " id="2594">Pago a Cuenta</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/RegistroNacionalContribuyentes/Solicitudes/Modificacion/Vistas/Principal.aspx'
+        " id="2688">Actualización al RNC</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/FacturaElectronica/FE_Facturador_Electronico.aspx'
+        " id="2786">Solicitud para ser Emisor Electrónico</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/FacturaElectronica/FE_Formulario_Facturador_Gratuito.aspx'
+        " id="3343">Facturador Gratuito</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/RegistroNacionalContribuyentes/Solicitudes/CeseTemporal/SolicitudCeseTemporal.aspx'
+        " id="2832">Solicitud de Cese Temporal</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/ReemA/Consulta_ReemA.aspx'
+        " id="2856">Solicitud de Saldo a Favor Asalariados y Empleadores</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/FacilidadesDePago/FormularioSolicitud.aspx'
+        " id="2862">Facilidades de Pago Vigente</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td width="100%">
+              <table style="width: 100%;" border="0">
+                <tr>
+                  <td class="tdheader" onClick="
+                ExpandContract('2590');
+              ">Formatos de Envios</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr id="2590">
+            <td>
+              <table width="100%" cellpadding="1" cellspacing="1">
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Cruces/EnvioDatos.aspx'
+        " id="2214">Enviar Archivos</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Cruces/EnvioDatosPre.aspx'
+        " id="2212">Enviar Archivos Pre-Validados</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td width="100%">
+              <table style="width: 100%;" border="0">
+                <tr>
+                  <td class="tdheader" onClick="
+                ExpandContract('2190');
+              ">Consultas</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr id="2190">
+            <td>
+              <table width="100%" cellpadding="1" cellspacing="1">
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/RegistroNacionalContribuyentes/Consultas/Eventos.aspx'
+        " id="2206">Actividades Económicas</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/CuentaCorriente/ListaAutorizaciones.aspx'
+        " id="2195">Autorizaciones de Pago</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/RegistroNacionalContribuyentes/Certificaciones/ListaAutorizaciones.aspx'
+        " id="2210">Consulta Certificaciones</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/comprobantes/CF_Descarga_Comprobante_N.aspx'
+        " id="2627">Solicitudes de Comprobantes</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/Ofv/UtilidadesOFV/CRetenNorma13.aspx'
+        " id="2408">Consulta Norma 07-19</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Empleadores/ConsultaSaldoempleador.aspx'
+        " id="2241">Consulta Saldos IR-18</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/CCContribuyente/SaldoConsolidado.aspx'
+        " id="2196">Cuenta Corriente</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/RegistroNacionalContribuyentes/Consultas/InformacionGeneral.aspx'
+        " id="2203">Datos Básicos RNC</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/Consultas/CNCFTerceros.aspx'
+        " id="2231">Datos de Terceros</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Documentos/ResumenDocumentos.aspx?tipo=dj'
+        " id="2197">Declaraciones</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/Consultas/DeudasPendientes.aspx'
+        " id="2612">Deudas pendientes</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Documentos/ResumenDocumentos.aspx?tipo=doc'
+        " id="2198">Documentos</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/RegistroNacionalContribuyentes/Consultas/Establecimientos.aspx'
+        " id="2205">Establecimientos</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Consultas/CGastosNcf.aspx'
+        " id="2194">Gastos NCF</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/RegistroNacionalContribuyentes/Consultas/Inmuebles.aspx'
+        " id="2220">Inmuebles</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Consultas/CRetenItbis.aspx'
+        " id="2200">Retenciones Compañías Adquirencia</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/RegistroNacionalContribuyentes/Consultas/Obligaciones.aspx'
+        " id="2207">Obligaciones</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/Consultas/HistoricoActas.aspx'
+        " id="2593">Historico de Actas RNC</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Documentos/ResumenDocumentos.aspx?tipo=pg'
+        " id="2199">Pagos</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/RegistroNacionalContribuyentes/Consultas/Representantes.aspx'
+        " id="2204">Socios/Accionistas</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/RegistroNacionalContribuyentes/Consultas/Vehiculos.aspx'
+        " id="2221">Vehículos</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/Cruces/Envios606.aspx'
+        " id="2583">Consulta Envios 606</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Consultas/PagoImportacionesDga.aspx'
+        " id="2603">Pagos de Importacion en DGA</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/DIOR/ConsultaEnvioDior.aspx'
+        " id="2605">Consulta Envio DIOR</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/tramites/solicitudestrk.aspx?mode=c'
+        " id="2606">Estatus de Solicitudes</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/Consultas/DetalleComprasRS3.aspx'
+        " id="2777">Detalle de Compras RS3</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td width="100%">
+              <table style="width: 100%;" border="0">
+                <tr>
+                  <td class="tdheader" onClick="
+                ExpandContract('2222');
+              ">Comprobantes</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr id="2222">
+            <td>
+              <table width="100%" cellpadding="1" cellspacing="1">
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Comprobantes/CF_Descarga_Comprobante.aspx'
+        " id="2225">Descarga Comprobantes</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td width="100%">
+              <table style="width: 100%;" border="0">
+                <tr>
+                  <td class="tdheader" onClick="
+                ExpandContract('2654');
+              ">Facturación Electrónica</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr id="2654">
+            <td>
+              <table width="100%" cellpadding="1" cellspacing="1">
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/FacturaElectronica/Consulta_Anulaciones_FE.aspx'
+        " id="2655">Consulta de Anulaciones</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Consultas/ConsultaECF.Aspx'
+        " id="2656">Consulta e-NCF Emitidos</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/ofv/Consultas/ConsultaRCF.Aspx'
+        " id="2657">Consulta e-NCF Recibidos</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td width="100%">
+              <table style="width: 100%;" border="0">
+                <tr>
+                  <td class="tdheader" onClick="
+                ExpandContract('2674');
+              ">Delegación de e-CF</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr id="2674">
+            <td>
+              <table width="100%" cellpadding="1" cellspacing="1">
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/FacturaElectronica/FE_Consulta_Delegacion.aspx'
+        " id="2676">Consulta de Delegaciones</td>
+                </tr>
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location=' #'; window.open('https://fg.dgii.gov.do/ecf/PortalFG/login', '_blank');' '
+        " id="2865">Acceder Facturador Gratuito</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td width="100%">
+              <table style="width: 100%;" border="0">
+                <tr>
+                  <td class="tdheader" onClick="
+                ExpandContract('2835');
+              ">Control Recaudación</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr id="2835">
+            <td>
+              <table width="100%" cellpadding="1" cellspacing="1">
+                <tr>
+                  <td class="menu" onMouseOver="movein(this)" onmouseout="moveout(this)" onClick="
+          document.location='/OFV/ControlRecaudacion/PerdidasCompensables.aspx'
+        " id="2836">Pérdidas Compensables</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </td>
+  </tr>
+</table>
+<script type="text/javascript">
+  var op = document.getElementById("_txtOpcion").value;
+  if (op == "") {
+    mostrarOcultar(document.getElementById("tablaMenu").getElementsByTagName("div")[1].id);
+  } else {
+    mostrarOcultar(op);
+  }
+</script>
+
+                </div>
+                    
+            </div>
+        </div>
+        
+        <div id="contenido_derecha">
+          <div id="content_content_derecha">
+            
+  <!-- Modal -->
+  <div class="modal fade" id="myModal" tabindex="-1" role="dialog" aria-labelledby="myModalLabel">
+    <div class="modal-dialog" role="document">
+      <div class="modal-content">
+        <div class="modal-header">
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+            <span aria-hidden="true">&times;</span></button>
+          <h4 class="modal-title" id="myModalLabel">Detalle Validación</h4>
+        </div>
+        <div class="modal-body">
+          <div id="my-datatable">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-info" data-dismiss="modal">
+            Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <table cellspacing="1" cellpadding="1" width="100%" border="0">
+    <tr>
+      <td class="titulo">Mis Envios 606</td>
+    </tr>
+    <tr>
+      <td align="center"><br /></td>
+    </tr>
+    <tr>
+      <td>
+        <div class="bloque-estados">
+          <h4 class="text-primary"><b>Estatus Validaci&oacute;n Archivos Remitidos:</b></h4>
+          <div class="mrgbottom2x">
+              <span class="text-primary"><strong>Recibido</strong></span>:
+               Ingresado a la Oficina Virtual para ser validado.
+          </div>
+          <div class="mrgbottom2x">
+              <span class="text-primary"><strong>En proceso</strong></span>:
+                            En proceso de validaci&oacute;n de los NCF remitidos.
+          </div>
+          <div class="mrgbottom2x">
+              <span class="text-primary"><strong>Completado</strong></span>:
+                            Recibido exitosamente.
+          </div>
+          <div class="mrgbottom2x">
+              <span class="text-primary"><strong>Error</strong></span>: Se encuentra
+                            con error en uno o m&aacute;s NCF, consulte el "Detalle de validaci&oacute;n".
+          </div>
+          <div>
+              <p></p>
+              <p>
+                    Al efectuarse una rectificativa y &eacute;sta presente alg&uacute;n error en la validaci&oacute;n, ser&aacute; aceptado como 
+                    bueno y v&aacute;lido el &uacute;ltimo archivo que haya sido recibido exitosamente (CARGADO-COMPLETADO).
+              </p>
+              <p>
+                  Para los NCF incluidos en el Formato 606, correspondientes a suplidores acogidos al RST, solamente se
+                  tomar&aacute; en cuenta para fines de  ITBIS Adelantado, el monto colocado en el campo "ITBIS Retenido".
+              </p>
+          </div>
+        </div>
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <table class="mGrid" cellspacing="0" rules="all" border="1" id="ctl00_ContentPlaceHolder1_DataGrid1" style="width:99%;border-collapse:collapse;">
+	<tr class="theader">
+		<td>Referencia</td><td>Tipo Inf.</td><td>Periodo</td><td>Fecha Enviado</td><td>Cant. Registros</td><td>Adelanto ITBIS Calculado</td><td>Estatus Envio</td><td>
+                Estatus Validación
+              </td><td align="center">
+                Detalle Validación
+              </td>
+	</tr><tr>
+		<td>60674220418</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202610</td><td>11/9/2026 7:25:28 PM</td><td>25</td><td>0</td><td>ERROR</td><td>
+                <font color="red">ERROR</font>
+                
+              </td><td style="width:120px;">
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl02_pnlValidacion">
+			
+                  <center>
+                    <b>Registros Invalidos: </b>8
+                    <br />
+                    <br />
+                    <input type="button" id="VerAcc" value="Ver Detalle" class="btn btn-danger" style="width: 100%"
+                      onclick='GETDetailVal(74220418);'>
+                  </center>
+                  <br />
+                
+		</div>
+                
+              </td>
+	</tr><tr>
+		<td>60673322633</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202609</td><td>10/11/2026 8:53:28 PM</td><td>28</td><td>26815.66</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl03_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl03_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(73322633);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60672465153</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202608</td><td>9/8/2026 9:12:33 PM</td><td>23</td><td>18320.57</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl04_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl04_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(72465153);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60671741831</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202607</td><td>8/10/2026 7:57:20 PM</td><td>35</td><td>220661.64</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl05_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl05_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(71741831);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60671013001</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202606</td><td>7/10/2026 7:51:13 PM</td><td>34</td><td>43297.80</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl06_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl06_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(71013001);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60670128073</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202605</td><td>6/6/2026 10:28:43 PM</td><td>31</td><td>43000.13</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl07_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl07_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(70128073);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60669350714</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202604</td><td>5/9/2026 10:58:21 AM</td><td>15</td><td>53108.86</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl08_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl08_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(69350714);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60668337862</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202603</td><td>4/11/2026 10:30:43 PM</td><td>14</td><td>3629.17</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl09_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl09_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(68337862);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60667330076</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202602</td><td>3/11/2026 8:53:12 PM</td><td>36</td><td>28135.25</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl10_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl10_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(67330076);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60666543671</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202601</td><td>2/13/2026 8:56:15 PM</td><td>55</td><td>129008.40</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl11_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl11_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(66543671);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60665588669</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202512</td><td>1/8/2026 11:48:50 PM</td><td>36</td><td>55298.69</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl12_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl12_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(65588669);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60664905743</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202511</td><td>12/7/2025 10:53:47 PM</td><td>22</td><td>28216.78</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl13_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl13_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(64905743);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60664152081</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202510</td><td>11/6/2025 8:58:01 PM</td><td>63</td><td>145637.26</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl14_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl14_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(64152081);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60663806712</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202509</td><td>10/20/2025 4:52:15 PM</td><td>47</td><td>138796.82</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl15_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl15_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(63806712);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr><tr>
+		<td>60662610807</td><td>COMPRAS DE BIENES Y SERVICIOS</td><td>202508</td><td>9/3/2025 1:48:34 PM</td><td>3</td><td>1689.37</td><td>CARGADO</td><td>
+                COMPLETADO
+                
+              </td><td style="width:120px;">
+                
+                <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl16_PnlResumen">
+			
+                  
+
+                  <br />
+                  <div id="ctl00_ContentPlaceHolder1_DataGrid1_ctl16_Panel2">
+				
+                    <center>
+                      <input type="button" id="VerAcc" value="Ver Resúmen" class="btn btn-success" style="width: 100%"
+                        onclick='GETDetailResumen(62610807);'>
+                    </center>
+
+                  
+			</div>
+
+                  <br />
+                
+		</div>
+              </td>
+	</tr>
+</table>
+      </td>
+    </tr>
+  </table>
+
+          </div>
+        </div>
+        <div class="limpiar"></div>
+        
+        <div id="pie">
+          <span>Copyright DGII ©
+                    2026
+                    . Todos los Derechos Reservados. <a href="javascript:void(0);" onclick="$.colorbox({iframe:true, close:'X', width:'840px', height:'750px', href:'/ofv/terminos.htm'});">Términos de uso</a> | <a href="javascript:void(0);" onclick="$.colorbox({iframe:true, close:'X', width:'840px', height:'750px', href:'/ofv/privacidad.htm'});">Privacidad </a></span>
+          <br />
+          <div>
+            <span>Telf. 689-2181 - Av. México #48, Santo Domingo, Rep. Dom. </span>
+            <span id="minilogof">
+              <img src="/OFV/Estilos/imagenes/spacer.gif" alt="" />
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </form>
+</body>
+</html>
