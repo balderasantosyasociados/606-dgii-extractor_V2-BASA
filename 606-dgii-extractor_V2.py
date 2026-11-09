@@ -29,21 +29,12 @@ def predecir_tipo_gasto(emisor, ncf):
     return "02"
 
 def es_ncf_valido_dgii(ncf):
-    """Valida la estructura formal de un NCF convencional o e-CF electrónico."""
     if not ncf or not isinstance(ncf, str):
         return False
-    # Valida series tradicionales B01... y electrónicas E31...
     patron = re.compile(r'^[BE](01|02|11|13|14|15|31|32|41|43|44|45)\d{8}$')
     return bool(patron.match(ncf.strip().upper()))
 
 def calcular_retenciones_automaticas(fila):
-    """
-    Calcula dinámicamente las retenciones basadas en montos del set:
-    - Retención 18% ITBIS (Personas Físicas / Proveedores Informales B11)
-    - Retención 100% ITBIS (Cuando aplica a Personas Jurídicas)
-    - Retención 30% ISR (Acompañamiento corporativo)
-    - Retención ISR Personas Físicas (10% Honorarios/Servicios estándar)
-    """
     itbis = float(fila.get("MONTO FACTURADO EN ITBIS", 0) or 0)
     bruto = float(fila.get("MONTO BRUTO", 0) or 0)
     ncf = str(fila.get("NUMERO COMPROBANTE FISCAL", "")).upper()
@@ -82,17 +73,17 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                 if ncfs_encontrados:
                     for idx_ncf, ncf_num in enumerate(ncfs_encontrados):
                         ncf_clean = ncf_num.upper()
-                        rnc_clean = rncs_encontrados if len(rncs_encontrados) > 0 else "101564113"
+                        rnc_clean = rncs_encontrados[0] if len(rncs_encontrados) > 0 else "101564113"
                         
                         fecha_str = "01/10/2026"
                         fechas_found = fecha_pattern.findall(texto_pagina)
                         if fechas_found:
-                            fecha_str = fechas_found or fechas_found
+                            fecha_str = fechas_found[0][0] or fechas_found[0][1]
                         
                         partes = re.split(r'[/.-]', fecha_str)
                         if len(partes) == 3:
-                            if len(partes) == 2: partes = "20" + partes
-                            fecha_plana = f"{partes}{partes}{partes}"
+                            if len(partes[2]) == 2: partes[2] = "20" + partes[2]
+                            fecha_plana = f"{partes[2]}{partes[1]}{partes[0]}"
                         else:
                             fecha_plana = "20261001"
                             
@@ -115,8 +106,8 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         
                         registro = {
                             "RNC CEDULA": rnc_clean,
-                            "TIPO BIENES Y SERVICIOS": predecir_tipo_gasto(emisor_tag, ncf_clean),
                             "NUMERO COMPROBANTE FISCAL": ncf_clean,
+                            "TIPO BIENES Y SERVICIOS": predecir_tipo_gasto(emisor_tag, ncf_clean),
                             "FECHA COMPROBANTE": fecha_plana,
                             "PERIODO": periodo_factura,
                             "EMISOR COMERCIAL": emisor_tag,
@@ -129,7 +120,6 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                             "FORMA PAGO": "02" if "CREDITO" in texto_pagina.upper() else "01"
                         }
                         
-                        # Cálculo en línea de retenciones
                         r18, r100, r30, rfis = calcular_retenciones_automaticas(registro)
                         registro["MONTO RETENIDO A PERSONA FISICA 18%"] = r18
                         registro["MONTO FACTURADO Y RETENIDO A PERSONA JURIDICA 100%"] = r100
@@ -144,14 +134,13 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                     if len(ncfs_encontrados) > 1:
                         continue
         else:
-            # Contingencia técnica controlada multiformato
             registro_mock = {
-                "RNC CEDULA": "101019921", "TIPO BIENES Y SERVICIOS": "02", "NUMERO COMPROBANTE FISCAL": "E310010374911",
+                "RNC CEDULA": "101019921", "NUMERO COMPROBANTE FISCAL": "E310010374911", "TIPO BIENES Y SERVICIOS": "02",
                 "FECHA COMPROBANTE": f"{periodo_filtro}15", "PERIODO": periodo_filtro, "EMISOR COMERCIAL": f"CCN REAL ({archivo_nombre})",
                 "MONTO TOTAL DE LA FACTURA": 2623.00, "MONTO BRUTO": 2222.89, "MONTO FACTURADO EN ITBIS": 400.11,
                 "MONTO FACTURADO EN COMPRAS DE BIENES": 2222.89, "MONTO FACTURADO EN SERVICIOS": 0.00, "MONTO PAGADO EN PROPINAS": 0.00,
-                "FORMA PAGO": "01", "MONTO RETENIDO A PERSONA FISICA 18%": 0.00, "MONTO FACTURADO Y RETENIDO A PERSONA JURIDICA 100%": 0.00,
-                "MONTO RETENIDO A EMPRESA DEL 30%": 0.00, "MONTO RETENIDO A PERSONAS FISICAS ISR": 0.00
+                "MONTO RETENIDO A PERSONA FISICA 18%": 0.00, "MONTO FACTURADO Y RETENIDO A PERSONA JURIDICA 100%": 0.00,
+                "MONTO RETENIDO A EMPRESA DEL 30%": 0.00, "MONTO RETENIDO A PERSONAS FISICAS ISR": 0.00, "FORMA PAGO": "01"
             }
             facturas.append(registro_mock)
     except Exception as e:
@@ -182,3 +171,16 @@ if archivos:
         lista_facturas = []
         lista_incidencias = []
         
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        for idx, archivo in enumerate(archivos):
+            status_text.text(f"Analizando transacciones en: {archivo.name}...")
+            f_res, i_res = procesar_buffer_facturas(archivo.name, archivo.read(), periodo_seleccionado)
+            lista_facturas.extend(f_res)
+            lista_incidencias.extend(i_res)
+            
+            porcentaje = int(((idx + 1) / len(archivos)) * 100)
+            progress_bar.progress(porcentaje)
+            time.sleep(0.05)
+            
