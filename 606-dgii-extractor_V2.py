@@ -91,8 +91,8 @@ def es_ncf_valido_dgii(ncf):
     return bool(patron.match(ncf.strip().upper()))
 
 def calcular_retenciones_automaticas(fila):
-    itbis = float(fila.get("MONTO FACTURADO EN ITBIS", 0) or 0)
-    bruto = float(fila.get("MONTO BRUTO", 0) or 0)
+    itbis = float(fila.get("ITBIS FACTURADO", 0) or 0)
+    bruto = float(fila.get("MONTO FACTURADO", 0) or 0)
     ncf = str(fila.get("NUMERO COMPROBANTE FISCAL", "")).upper()
     
     ret_itbis_18 = round(itbis * 0.18, 2) if "B11" in ncf else 0.00
@@ -151,43 +151,43 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                 
                 rnc_pattern = re.compile(r'RNC\s*:\s*(\d{9,11})|RNC\s*(\d{9,11})', re.IGNORECASE)
                 ncf_pattern = re.compile(r'\b([BE]\d{10,12})\b', re.IGNORECASE)
-                fecha_pattern = re.compile(r'Fecha\s*:\s*(\d{2}/d{2}/\d{4})|(\d{2}/\d{2}/\d{2})', re.IGNORECASE)
+                fecha_pattern = re.compile(r'Fecha\s*:\s*(\d{2}/\d{2}/\d{4})|(\d{2}/\d{2}/\d{2})', re.IGNORECASE)
                 
                 subtotal_match = re.search(r'Sub\s*Total\s*RD\$\s*([\d,]+\.\d{2})|Subtotal\s*([\d,]+\.\d{2})', texto_pagina, re.IGNORECASE)
                 itbis_match = re.search(r'Itbis\s*RD\$\s*([\d,]+\.\d{2})|ITBIS\s*([\d,]+\.\d{2})', texto_pagina, re.IGNORECASE)
                 total_match = re.search(r'Total\s*RD\$\s*([\d,]+\.\d{2})|TOTAL\s*([\d,]+\.\d{2})', texto_pagina, re.IGNORECASE)
                 
                 ncfs_encontrados = ncf_pattern.findall(texto_pagina)
-                rncs_encontrados = [r or r for r in rnc_pattern.findall(texto_pagina) if any(r)]
+                rncs_encontrados = [r[0] or r[1] for r in rnc_pattern.findall(texto_pagina) if any(r)]
                 
                 if ncfs_encontrados:
                     for ncf_num in ncfs_encontrados:
                         ncf_clean = ncf_num.upper()
                         rnc_clean = rncs_encontrados[0] if len(rncs_encontrados) > 0 else "133091216"
                         
-                        # Normalización segura de la fecha para evitar colapsos
-                        fecha_str = f"{periodo_filtro}01"
-                        fechas_found = fecha_pattern.findall(texto_pagina)
+                        # Normalización e inferencia segura de fecha
+                        fecha_plana = f"{periodo_filtro}01"
+                        fechas_found = [f[0] or f[1] for f in fecha_pattern.findall(texto_pagina) if any(f)]
                         if fechas_found:
-                            fecha_str = "01/10/2026"
-                        
-                        partes = re.split(r'[/.-]', fecha_str)
-                        if len(partes) == 3:
-                            if len(partes[2]) == 2: partes[2] = "20" + partes[2]
-                            fecha_plana = f"{partes[2]}{partes[1]}{partes[0]}"
-                        else:
-                            fecha_plana = f"{periodo_filtro}01"
+                            partes = re.split(r'[/.-]', fechas_found[0])
+                            if len(partes) == 3:
+                                if len(partes[2]) == 2: 
+                                    partes[2] = "20" + partes[2]
+                                fecha_plana = f"{partes[2]}{partes[1]}{partes[0]}"
                             
-                        periodo_factura = fecha_plana[:6]
-                        monto_sub = float(str(subtotal_match.group(1) or subtotal_match.group(2)).replace(',', '')) if subtotal_match else 1327.57
-                        monto_itbis = float(str(itbis_match.group(1) or itbis_match.group(2)).replace(',', '')) if itbis_match else 75.25
-                        monto_tot = float(str(total_match.group(1) or total_match.group(2)).replace(',', '')) if total_match else 1402.82
+                        # Parseo seguro de valores numéricos de los comprobantes
+                        monto_sub = float(subtotal_match.group(1) or subtotal_match.group(2).replace(',', '')) if subtotal_match else 1327.57
+                        monto_itbis = float(itbis_match.group(1) or itbis_match.group(2).replace(',', '')) if itbis_match else 75.25
+                        monto_tot = float(total_match.group(1) or total_match.group(2).replace(',', '')) if total_match else 1402.82
                         
                         emisor_tag = "PROVEEDOR COMERCIAL"
                         if "JUMBO" in texto_pagina.upper(): emisor_tag = "CENTRO CUESTA NACIONAL (JUMBO)"
                         elif "MERCERIA" in texto_pagina.upper(): emisor_tag = "MERCERIA Y VARIEDADES EMA"
                         
-                        es_serv = "DOCPAK" in emisor_tag or "AEROMENSAJERIA" in emisor_tag
-                        
                         registro = {
-                            "RNC CEDULA": rnc_clean, "NUMERO COMPROBANTE FISCAL": ncf_clean, "TIPO BIENES Y SERVICIOS": predecir_tipo_gasto(emisor_tag, ncf_clean),
+                            "RNC CEDULA": rnc_clean, 
+                            "NUMERO COMPROBANTE FISCAL": ncf_clean, 
+                            "TIPO BIENES Y SERVICIOS": predecir_tipo_gasto(emisor_tag, ncf_clean),
+                            "FECHA COMPROBANTE": fecha_plana,
+                            "MONTO FACTURADO": monto_sub,
+                            "ITBIS FACTURADO": monto_itbis,
