@@ -11,6 +11,7 @@ import json
 import base64
 import time
 import subprocess
+import datetime
 from pypdf import PdfReader
 
 # Configuración de entorno y diseño corporativo de Streamlit
@@ -168,7 +169,6 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         ncf_clean = ncf_num.upper()
                         rnc_clean = rncs_encontrados[0] if len(rncs_encontrados) > 0 else "133091216"
                         
-                        # --- INDENTACIÓN Y COINCIDENCIA ARREGLADA AQUÍ ---
                         fecha_str = f"{periodo_filtro}01"
                         fechas_found = fecha_pattern.findall(texto_pagina)
                         if fechas_found:
@@ -176,8 +176,7 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         
                         partes = re.split(r'[/.-]', fecha_str)
                         if len(partes) == 3:
-                            if len(partes[2]) == 2: 
-                                partes[2] = "20" + partes[2]
+                            if len(partes[2]) == 2: partes[2] = "20" + partes[2]
                             fecha_plana = f"{partes[2]}{partes[1]}{partes[0]}"
                         else:
                             fecha_plana = f"{periodo_filtro}01"
@@ -194,3 +193,4 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         es_serv = "DOCPAK" in emisor_tag or "AEROMENSAJERIA" in emisor_tag
                         
                         registro = {
+                            "RNC CEDULA": rnc_clean, "NUMERO COMPROBANTE FISCAL": ncf_clean, "TIPO BIENES Y SERVICIOS": predecir_tipo_gasto(emisor_tag, ncf_clean),
