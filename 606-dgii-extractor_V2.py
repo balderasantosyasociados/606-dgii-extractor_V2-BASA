@@ -268,8 +268,3 @@ else:
         st.text_input("Razón Social", value=empresa_activa["razon_social"], disabled=True)
         st.text_input("Clave OFV Almacenada", value=empresa_activa["clave_ofv"], type="password", disabled=True)
         st.success(f"Directorio de trabajo seguro: `{carpeta_activa}`")
-
-<ElicitationsGroup message="Para continuar ampliando las capacidades del ecosistema multiempresa:">
-  <Elicitation label="Agregar validación de cruces automáticos 606 vs 607 por cada empresa" query="Implementa un sub-módulo de cruces fiscales automáticos para comparar compras y ventas de forma independiente por empresa."/>
-  <Elicitation label="Crear funcionalidad de exportación masiva en ZIP para todos los reportes de las empresas" query="Añade un botón de exportación masiva para empaquetar en un archivo ZIP todos los reportes y carpetas de las empresas registradas."/>
-</ElicitationsGroup>
