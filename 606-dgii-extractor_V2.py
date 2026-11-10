@@ -10,19 +10,19 @@ import os
 import json
 import base64
 import time
-from pypdf import PdfReader
 
-# Configuración de entorno y diseño corporativo de Streamlit
-st.set_page_config(
-    page_title="BSA Forensic Intelligence - Ecosistema Multiempresa Modular",
-    page_icon="⚖️",
-    layout="wide"
-)
+# Manejo defensivo y tolerante a fallos para la importación de pypdf
+try:
+    from pypdf import PdfReader
+    PYPDF_DISPONIBLE = True
+except ImportError:
+    PYPDF_DISPONIBLE = False
 
 # Directorio raíz para almacenamiento de datos corporativos persistentes
 BASE_DIR = "empresas_db"
 os.makedirs(BASE_DIR, exist_ok=True)
 
+# --- 1. GESTIÓN DE PERSISTENCIA Y REGISTRO MULTIEMPRESA ---
 def cargar_empresas_registradas():
     """Carga el registro histórico secuencial de empresas almacenadas físicamente."""
     meta_path = os.path.join(BASE_DIR, "registro_empresas.json")
@@ -31,7 +31,11 @@ def cargar_empresas_registradas():
             with open(meta_path, "r", encoding="utf-8") as f:
                 return json.load(f)
         except Exception:
-            return {}
+            return obtener_catalogo_defecto()
+    return obtener_catalogo_defecto()
+
+def obtener_catalogo_defecto():
+    """Devuelve el catálogo maestro base inicializado con los RNCs de auditoría."""
     return {
         "133091216": {"razon_social": "JA INVESTMENT ANTIG RD SRL", "nombre_comercial": "JA Investment Solutions", "clave": "********"},
         "133490331": {"razon_social": "Baldera Santos y Asociados SRL", "nombre_comercial": "BSA Fiscal Solutions", "clave": "********"}
@@ -40,33 +44,41 @@ def cargar_empresas_registradas():
 def guardar_empresas_registradas(empresas):
     """Guarda el registro actualizado de empresas de forma persistente."""
     meta_path = os.path.join(BASE_DIR, "registro_empresas.json")
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(empresas, f, indent=4, ensure_ascii=False)
+    try:
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(empresas, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        st.sidebar.error(f"Error en persistencia I/O: {str(e)}")
 
-# --- 1. MOTORES DE INFERENCIA FISCAL (REGLAS LOCALES DGII - RD) ---
+# --- 2. MOTORES DE INFERENCIA FISCAL (REGLAS LOCALES DGII - RD) ---
 def predecir_tipo_gasto(emisor, ncf):
+    """Analiza descriptores de negocio para clasificar automáticamente el Tipo de Costo de la DGII."""
     texto = f"{emisor} {ncf}".lower()
-    if any(k in texto for k in ["mensajeria", "docpak", "extremepaq", "correo", "flete"]):
+    if any(k in texto for k in ["mensajeria", "docpak", "extremepaq", "correo", "flete", "courier"]):
         return "02"  # Gastos por Trabajos, Suministros y Servicios
-    if any(k in texto for k in ["jumbo", "ccn", "sirena", "ramos", "supermercado", "price"]):
+    if any(k in texto for k in ["jumbo", "ccn", "sirena", "ramos", "supermercado", "price", "nacional"]):
         return "02"
-    if any(k in texto for k in ["bessone", "petronan", "combustible", "gasolina", "energy", "total"]):
+    if any(k in texto for k in ["bessone", "petronan", "combustible", "gasolina", "energy", "total", "texaco"]):
         return "02"
-    if any(k in texto for k in ["merceria", "ema", "papel", "resma"]):
+    if any(k in texto for k in ["merceria", "ema", "papel", "resma", "libreria"]):
         return "02"
     return "02"
 
 def es_ncf_valido_dgii(ncf):
+    """Valida la estructura alfanumérica y longitud formal de un NCF o e-CF electrónico."""
     if not ncf or not isinstance(ncf, str):
         return False
+    # Estructura regulada: B o E seguido de un tipo de 2 dígitos y un secuencial de 8 dígitos (11 caracteres)
     patron = re.compile(r'^[BE](01|02|11|13|14|15|31|32|41|43|44|45)\d{8}$')
     return bool(patron.match(ncf.strip().upper()))
 
 def calcular_retenciones_automaticas(fila):
+    """Calcula las escalas de retención aplicables según la norma dominicana."""
     itbis = float(fila.get("MONTO FACTURADO EN ITBIS", 0) or 0)
     bruto = float(fila.get("MONTO BRUTO", 0) or 0)
     ncf = str(fila.get("NUMERO COMPROBANTE FISCAL", "")).upper()
     
+    # Retenciones automáticas para Proveedores Informales (B11) o Reglas Especiales
     ret_itbis_18 = round(itbis * 0.18, 2) if "B11" in ncf else 0.00
     ret_itbis_100 = round(itbis * 1.00, 2) if "B11" in ncf else 0.00
     ret_isr_30 = round(bruto * 0.30, 2) if "B11" in ncf else 0.00
@@ -74,30 +86,45 @@ def calcular_retenciones_automaticas(fila):
     
     return ret_itbis_18, ret_itbis_100, ret_isr_30, ret_isr_fisica
 
-# --- 2. PARSEADORES DE LA OFICINA VIRTUAL (OFV-DGII) ---
+# --- 3. PARSEADORES DE LA OFICINA VIRTUAL (OFV - DGII) ---
 def parsear_tabla_historica_ofv(html_contenido):
+    """Parsea el código HTML plano extraído de Consultar mis Envíos 606 línea por línea."""
     registros_encontrados = []
     filas = re.findall(r'<tr>(.*?)</tr>', html_contenido, re.DOTALL)
+    
     for fila in filas:
         fila_limpia = re.sub(r'<div[^>]*>.*?</div>', '', fila, flags=re.DOTALL)
         fila_limpia = re.sub(r'<td style="width:120px;">.*?</td>', '', fila_limpia, flags=re.DOTALL)
         celdas = re.findall(r'<td>(.*?)</td>', fila_limpia, re.DOTALL)
+        
         if len(celdas) >= 6:
+            secuencia = re.sub(r'<[^>]*>', '', celdas[0]).strip()
+            tipo_inf = re.sub(r'<[^>]*>', '', celdas[1]).strip()
+            periodo = re.sub(r'<[^>]*>', '', celdas[2]).strip()
+            fecha_envio = re.sub(r'<[^>]*>', '', celdas[3]).strip()
+            cantidad_reg = re.sub(r'<[^>]*>', '', celdas[4]).strip()
+            monto = re.sub(r'<[^>]*>', '', celdas[5]).strip()
+            estatus = re.sub(r'<[^>]*>', '', celdas[6]).strip() if len(celdas) > 6 else "CARGADO"
+            
             try:
+                cant_clean = int(re.sub(r'[^\d]', '', cantidad_reg))
+                monto_clean = float(re.sub(r'[^\d\.]', '', monto.replace(',', '')))
+                
                 registros_encontrados.append({
-                    "SECUENCIA REFERENCIA": re.sub(r'<[^>]*>', '', celdas[0]).strip(),
-                    "TIPO INFORMACION": re.sub(r'<[^>]*>', '', celdas[1]).strip(),
-                    "PERIODO FISCAL": re.sub(r'<[^>]*>', '', celdas[2]).strip(),
-                    "FECHA HORA ENVIO": re.sub(r'<[^>]*>', '', celdas[3]).strip(),
-                    "CANTIDAD REGISTROS": int(re.sub(r'[^\d]', '', celdas[4])),
-                    "MONTO FACTURADO TOTAL": float(re.sub(r'[^\d\.]', '', celdas[5].replace(',', ''))),
-                    "ESTADO RECEPCION": re.sub(r'<[^>]*>', '', celdas[6]).strip() if len(celdas) > 6 else "CARGADO"
+                    "SECUENCIA REFERENCIA": secuencia,
+                    "TIPO INFORMACION": tipo_inf,
+                    "PERIODO FISCAL": periodo,
+                    "FECHA HORA ENVIO": fecha_envio,
+                    "CANTIDAD REGISTROS": cant_clean,
+                    "MONTO FACTURADO TOTAL": monto_clean,
+                    "ESTADO RECEPCION": estatus.strip().replace('\n', ' ').replace('\r', '')
                 })
             except ValueError:
                 continue
     return registros_encontrados
 
 def decodificar_acuse_viewstate(viewstate_str):
+    """Decodifica estructuras de datos empaquetadas en ViewStates oficiales de la DGII."""
     try:
         decoded_bytes = base64.b64decode(viewstate_str)
         text_extracted = decoded_bytes.decode('utf-8', errors='ignore')
@@ -111,16 +138,25 @@ def decodificar_acuse_viewstate(viewstate_str):
     except Exception:
         return {"HASH_VALIDACION": "5CC7B1D6322B405152BCCC1F21172D3B", "PERIODO_RECEPCION": "202610", "TIPO_FORMATO": "606", "ESTATUS_OFV": "RECIBIDO"}
 
-# --- 3. MOTOR PARSEADOR ITERATIVO MULTIPÁGINA (PDF) ---
+# --- 4. MOTOR DE PROCESAMIENTO E INGESTA EXHAUSTIVA MULTIFORMATO ---
 def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
-    facturas, incidencias = [], []
+    """
+    Parsea de forma iterativa y lineal buffers de datos (PDF, Excel, CSV, TXT).
+    Aísla las cadenas fiscales, ejecuta validaciones de período y conciliación aritmética.
+    """
+    facturas = []
+    incidencias = []
+    ncfs_vistos = set() # Estructura hash para eliminación en origen de NCF duplicados
+    
     try:
-        if archivo_nombre.lower().endswith('.pdf'):
+        # FASE A1: Procesamiento estructurado de documentos PDF multipágina
+        if archivo_nombre.lower().endswith('.pdf') and PYPDF_DISPONIBLE:
             reader = PdfReader(io.BytesIO(archivo_bytes))
-            for page in reader.pages:
+            for numero_pagina, page in enumerate(reader.pages):
                 texto_pagina = page.extract_text()
                 if not texto_pagina: continue
                 
+                # Expresiones regulares normalizadas con operadores planos corregidos (evitando \s\*)
                 rnc_pattern = re.compile(r'RNC\s*:\s*(\d{9,11})|RNC\s*(\d{9,11})', re.IGNORECASE)
                 ncf_pattern = re.compile(r'\b([BE]\d{10,12})\b', re.IGNORECASE)
                 fecha_pattern = re.compile(r'Fecha\s*:\s*(\d{2}/\d{2}/\d{4})|(\d{2}/\d{2}/\d{2})', re.IGNORECASE)
@@ -135,46 +171,25 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                 if ncfs_encontrados:
                     for ncf_num in ncfs_encontrados:
                         ncf_clean = ncf_num.upper()
+                        
+                        # Control preventivo: Filtrado inmediato de duplicados dentro del lote cargado
+                        if ncf_clean in ncfs_vistos:
+                            incidencias.append({
+                                "RNC CEDULA": rncs_encontrados[0] if rncs_encontrados else "000000000",
+                                "NUMERO COMPROBANTE FISCAL": ncf_clean,
+                                "FECHA COMPROBANTE": "00000000",
+                                "EMISOR COMERCIAL": "ERROR REPETIDO",
+                                "MONTO TOTAL DE LA FACTURA": 0.00,
+                                "MOTIVO RECHAZO": "NCF Duplicado detectado en el mismo lote de archivos"
+                            })
+                            continue
+                            
+                        ncfs_vistos.add(ncf_clean)
                         rnc_clean = rncs_encontrados[0] if len(rncs_encontrados) > 0 else "133091216"
                         
                         fecha_str = "01/10/2026"
                         fechas_found = fecha_pattern.findall(texto_pagina)
-                        if fechas_found: fecha_str = fechas_found[0][0] or fechas_found[0][1]
+                        if fechas_found: 
+                            fecha_str = fechas_found[0][0] or fechas_found[0][1]
                         
                         partes = re.split(r'[/.-]', fecha_str)
-                        if len(partes) == 3:
-                            if len(partes[2]) == 2: partes[2] = "20" + partes[2]
-                            fecha_plana = f"{partes[2]}{partes[1]}{partes[0]}"
-                        else:
-                            fecha_plana = "20261001"
-                            
-                        periodo_factura = fecha_plana[:6]
-                        monto_sub = float(str(subtotal_match.group(1) or subtotal_match.group(2)).replace(',', '')) if subtotal_match else 1327.57
-                        monto_itbis = float(str(itbis_match.group(1) or itbis_match.group(2)).replace(',', '')) if itbis_match else 75.25
-                        monto_tot = float(str(total_match.group(1) or total_match.group(2)).replace(',', '')) if total_match else 1402.82
-                        
-                        emisor_tag = "PROVEEDOR COMERCIAL"
-                        if "JUMBO" in texto_pagina.upper(): emisor_tag = "CENTRO CUESTA NACIONAL (JUMBO)"
-                        elif "MERCERIA" in texto_pagina.upper(): emisor_tag = "MERCERIA Y VARIEDADES EMA"
-                        
-                        es_serv = "DOCPAK" in emisor_tag or "AEROMENSAJERIA" in emisor_tag
-                        
-                        registro = {
-                            "RNC CEDULA": rnc_clean, "NUMERO COMPROBANTE FISCAL": ncf_clean, "TIPO BIENES Y SERVICIOS": predecir_tipo_gasto(emisor_tag, ncf_clean),
-                            "FECHA COMPROBANTE": fecha_plana, "PERIODO": periodo_factura, "EMISOR COMERCIAL": emisor_tag, "MONTO TOTAL DE LA FACTURA": monto_tot,
-                            "MONTO BRUTO": monto_sub, "MONTO FACTURADO EN ITBIS": monto_itbis, "MONTO FACTURADO EN COMPRAS DE BIENES": 0.00 if es_serv else monto_sub,
-                            "MONTO FACTURADO EN SERVICIOS": monto_sub if es_serv else 0.00, "MONTO PAGADO EN PROPINAS": 0.00, "FORMA PAGO": "01"
-                        }
-                        r18, r100, r30, rfis = calcular_retenciones_automaticas(registro)
-                        registro.update({
-                            "MONTO RETENIDO A PERSONA FISICA 18%": r18, "MONTO FACTURADO Y RETENIDO A PERSONA JURIDICA 100%": r100,
-                            "MONTO RETENIDO A EMPRESA DEL 30%": r30, "MONTO RETENIDO A PERSONAS FISICAS ISR": rfis
-                        })
-                        
-                        if periodo_factura != periodo_filtro:
-                            incidencias.append({**registro, "MOTIVO RECHAZO": f"Fuera de período ({periodo_factura})"})
-                        else:
-                            facturas.append(registro)
-        else:
-            facturas.append({
-                "RNC CEDULA": "101019921", "NUMERO COMPROBANTE FISCAL": "E310010374911", "TIPO BIENES Y SERVICIOS": "02",
