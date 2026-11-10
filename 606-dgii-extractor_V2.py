@@ -32,7 +32,6 @@ def cargar_empresas_registradas():
                 return json.load(f)
         except Exception:
             return {}
-    # Catálogo inicial de contingencia técnica homologado con los hilos transaccionales
     return {
         "133091216": {"razon_social": "JA INVESTMENT ANTIG RD SRL", "nombre_comercial": "JA Investment Solutions", "clave": "********"},
         "133490331": {"razon_social": "Baldera Santos y Asociados SRL", "nombre_comercial": "BSA Fiscal Solutions", "clave": "********"}
