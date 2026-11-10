@@ -38,7 +38,7 @@ def cargar_empresas_registradas():
     }
 
 def guardar_empresas_registradas(empresas):
-    """Guarda el registro actualizado de empresas de forma persistente."""
+    """Guarda el registro actualizado de empresas de forma pf."""
     meta_path = os.path.join(BASE_DIR, "registro_empresas.json")
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(empresas, f, indent=4, ensure_ascii=False)
@@ -140,7 +140,7 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         fecha_str = "01/10/2026"
                         fechas_found = fecha_pattern.findall(texto_pagina)
                         if fechas_found: 
-                            fecha_str = fechas_found[0]
+                            fecha_str = "01/10/2026"
                         
                         partes = re.split(r'[/.-]', fecha_str)
                         if len(partes) == 3:
