@@ -6,20 +6,41 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 import re
 import io
-import time
+import os
+import json
 import base64
 from pypdf import PdfReader
 
 # Configuración de entorno y diseño corporativo de Streamlit
 st.set_page_config(
-    page_title="BSA Fiscal Solutions - Ecosistema de Auditoría e Ingesta Fiscal",
+    page_title="BSA Forensic Intelligence - Ecosistema Multiempresa Modular",
     page_icon="⚖️",
     layout="wide"
 )
 
+# Directorio raíz para almacenamiento de datos corporativos
+BASE_DIR = "empresas_db"
+os.makedirs(BASE_DIR, exist_ok=True)
+
+def cargar_empresas_registradas():
+    """Carga el registro histórico secuencial de empresas almacenadas."""
+    meta_path = os.path.join(BASE_DIR, "registro_empresas.json")
+    if os.path.exists(meta_path):
+        try:
+            with open(meta_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+def guardar_empresas_registradas(empresas):
+    """Guarda el registro actualizado de empresas."""
+    meta_path = os.path.join(BASE_DIR, "registro_empresas.json")
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(empresas, f, indent=4, ensure_ascii=False)
+
 # --- 1. MOTORES DE INFERENCIA FISCAL (REGLAS LOCALES DGII - RD) ---
 def predecir_tipo_gasto(emisor, ncf):
-    """Analiza los descriptores de negocio para clasificar automáticamente el Tipo de Gasto."""
     texto = f"{emisor} {ncf}".lower()
     if any(k in texto for k in ["mensajeria", "docpak", "extremepaq", "correo", "flete"]):
         return "02"  # Gastos por Trabajos, Suministros y Servicios
@@ -31,15 +52,7 @@ def predecir_tipo_gasto(emisor, ncf):
         return "02"
     return "02"
 
-def es_ncf_valido_dgii(ncf):
-    """Valida la estructura de un NCF convencional o e-CF electrónico regulado por la OFV."""
-    if not ncf or not isinstance(ncf, str):
-        return False
-    patron = re.compile(r'^[BE](01|02|11|13|14|15|31|32|41|43|44|45)\d{8}$')
-    return bool(patron.match(ncf.strip().upper()))
-
 def calcular_retenciones_automaticas(fila):
-    """Calcula las escalas de retención de la DGII en función de los montos facturados."""
     itbis = float(fila.get("MONTO FACTURADO EN ITBIS", 0) or 0)
     bruto = float(fila.get("MONTO BRUTO", 0) or 0)
     ncf = str(fila.get("NUMERO COMPROBANTE FISCAL", "")).upper()
@@ -51,64 +64,7 @@ def calcular_retenciones_automaticas(fila):
     
     return ret_itbis_18, ret_itbis_100, ret_isr_30, ret_isr_fisica
 
-# --- 2. PARSEADORES DE LA OFICINA VIRTUAL (OFV-DGII) ---
-def parsear_tabla_historica_ofv(html_contenido):
-    """Parsea el código HTML plano extraído de Consultar mis Envíos 606 línea por línea."""
-    registros_encontrados = []
-    filas = re.findall(r'<tr>(.*?)</tr>', html_contenido, re.DOTALL)
-    
-    for fila in filas:
-        fila_limpia = re.sub(r'<div[^>]*>.*?</div>', '', fila, flags=re.DOTALL)
-        fila_limpia = re.sub(r'<td style="width:120px;">.*?</td>', '', fila_limpia, flags=re.DOTALL)
-        celdas = re.findall(r'<td>(.*?)</td>', fila_limpia, re.DOTALL)
-        
-        if len(celdas) >= 6:
-            secuencia = re.sub(r'<[^>]*>', '', celdas[0]).strip()
-            tipo_inf = re.sub(r'<[^>]*>', '', celdas[1]).strip()
-            periodo = re.sub(r'<[^>]*>', '', celdas[2]).strip()
-            fecha_envio = re.sub(r'<[^>]*>', '', celdas[3]).strip()
-            cantidad_reg = re.sub(r'<[^>]*>', '', celdas[4]).strip()
-            monto = re.sub(r'<[^>]*>', '', celdas[5]).strip()
-            estatus = re.sub(r'<[^>]*>', '', celdas[6]).strip() if len(celdas) > 6 else "CARGADO"
-            
-            try:
-                cant_clean = int(re.sub(r'[^\d]', '', cantidad_reg))
-                monto_clean = float(re.sub(r'[^\d\.]', '', monto.replace(',', '')))
-                
-                registros_encontrados.append({
-                    "SECUENCIA REFERENCIA": secuencia, "TIPO INFORMACION": tipo_inf, "PERIODO FISCAL": periodo,
-                    "FECHA HORA ENVIO": fecha_envio, "CANTIDAD REGISTROS": cant_clean, "MONTO FACTURADO TOTAL": monto_clean,
-                    "ESTADO RECEPCION": estatus.strip().replace('\n', ' ').replace('\r', '')
-                })
-            except ValueError:
-                continue
-    return registros_encontrados
-
-def decodificar_acuse_viewstate(viewstate_str):
-    """Decodifica el árbol binario de la vista de control oficial para extraer la metadata fiscal."""
-    try:
-        decoded_bytes = base64.b64decode(viewstate_str)
-        text_extracted = decoded_bytes.decode('utf-8', errors='ignore')
-        
-        hash_match = re.search(r'([0-9A-F]{32})', text_extracted, re.IGNORECASE)
-        periodo_match = re.search(r'(\d{6})', text_extracted)
-        tipo_match = re.search(r'(606|607|Anexo)', text_extracted)
-        registros_match = re.search(r'Cantidad\s*Registros\s*:\s*(\d+)', text_extracted, re.IGNORECASE)
-        
-        return {
-            "HASH_VALIDACION": hash_match.group(1) if hash_match else "5CC7B1D6322B405152BCCC1F21172D3B",
-            "PERIODO_RECEPCION": periodo_match.group(1) if periodo_match else "202610",
-            "TIPO_FORMATO": "606 - ANEXO A IT-1" if "Anexo" in text_extracted or (tipo_match and tipo_match.group(1) == "Anexo") else "606",
-            "CANTIDAD_ACEPTADA": int(registros_match.group(1)) if registros_match else 25,
-            "ESTATUS_OFV": "RECIBIDO Y VERIFICADO"
-        }
-    except Exception:
-        return {
-            "HASH_VALIDACION": "5CC7B1D6322B405152BCCC1F21172D3B", "PERIODO_RECEPCION": "202610", 
-            "TIPO_FORMATO": "606 - ANEXO A IT-1", "CANTIDAD_ACEPTADA": 25, "ESTATUS_OFV": "RECIBIDO Y APROBADO"
-        }
-
-# --- 3. MOTOR PARSEADOR ITERATIVO MULTIPÁGINA DE ARCHIVOS REALES (PDF) ---
+# --- 2. PROCESADOR DE SOPORTE INDEPENDIENTE ---
 def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
     facturas, incidencias = [], []
     try:
@@ -150,7 +106,7 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         monto_itbis = float(str(itbis_match.group(1) or itbis_match.group(2)).replace(',', '')) if itbis_match else 75.25
                         monto_tot = float(str(total_match.group(1) or total_match.group(2)).replace(',', '')) if total_match else 1402.82
                         
-                        emisor_tag = "AEROMENSAJERIA DOCPAK SRL"
+                        emisor_tag = "PROVEEDOR COMERCIAL"
                         if "JUMBO" in texto_pagina.upper(): emisor_tag = "CENTRO CUESTA NACIONAL (JUMBO)"
                         elif "MERCERIA" in texto_pagina.upper(): emisor_tag = "MERCERIA Y VARIEDADES EMA"
                         
@@ -179,36 +135,141 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
         
     return facturas, incidencias
 
-# --- 4. INTERFAZ DE USUARIO STREAMLIT (BSA FISCAL INTELLIGENCE) ---
-st.title("⚖️ BSA Fiscal Solutions - Ecosistema de Auditoría e Ingesta Fiscal")
-st.markdown("Plataforma avanzada para la gestión, validación y procesamiento de archivos fiscales (606, 607 y Anexos DGII - República Dominicana).")
+# --- 3. INTERFAZ DE USUARIO MULTIEMPRESA Y MODULAR ---
+st.title("⚖️ BSA Forensic Intelligence - Ecosistema Modular por Empresa")
 
-periodo_sel = st.sidebar.text_input("Período Fiscal (AAAAMM)", value="202610")
-archivo_subido = st.file_uploader("Cargar Facturas en PDF o Reporte de la Oficina Virtual", type=["pdf", "html", "txt"])
+empresas_db = cargar_empresas_registradas()
 
-if archivo_subido is not None:
-    bytes_data = archivo_subido.getvalue()
-    nombre_archivo = archivo_subido.name
-    
-    st.info(f"Procesando archivo: {nombre_archivo}")
-    facturas_procesadas, incidencias_procesadas = procesar_buffer_facturas(nombre_archivo, bytes_data, periodo_sel)
-    
-    if facturas_procesadas:
-        df_facturas = pd.DataFrame(facturas_procesadas)
-        st.success(f"¡Se procesaron con éxito {len(df_facturas)} registros fiscales!")
-        st.dataframe(df_facturas)
+st.sidebar.header("📁 Selector y Gestión de Empresas")
+accion_empresa = st.sidebar.radio("Acción", ["Trabajar con Empresa Existente", "Registrar Nueva Empresa"])
+
+if accion_empresa == "Registrar Nueva Empresa":
+    with st.sidebar.form("form_nueva_empresa"):
+        st.subheader("Nuevo Contribuyente")
+        nuevo_rnc = st.text_input("RNC / ID Fiscal")
+        nueva_razon = st.text_input("Razón Social / Nombre")
+        nueva_clave = st.text_input("Clave OFV (DGII)", type="password")
+        submit_empresa = st.form_submit_button("Crear Directorio y Credenciales")
         
-        # Botón de exportación a Excel
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_facturas.to_excel(writer, index=False, sheet_name='Formato 606')
-        processed_data = output.getvalue()
+        if submit_empresa:
+            if nuevo_rnc and nueva_razon and nueva_clave:
+                rnc_clean = re.sub(r'\D', '', nuevo_rnc)
+                carpeta_empresa = os.path.join(BASE_DIR, f"RNC_{rnc_clean}")
+                os.makedirs(carpeta_empresa, exist_ok=True)
+                
+                empresas_db[rnc_clean] = {
+                    "rnc": rnc_clean,
+                    "razon_social": nueva_razon,
+                    "clave_ofv": nueva_clave,
+                    "carpeta": carpeta_empresa,
+                    "fecha_registro": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S")
+                }
+                guardar_empresas_registradas(empresas_db)
+                st.sidebar.success(f"¡Empresa {nueva_razon} registrada!")
+                st.rerun()
+            else:
+                st.sidebar.error("Complete todos los campos.")
+
+if not empresas_db:
+    st.warning("No hay empresas registradas. Por favor registre una en la barra lateral.")
+else:
+    st.sidebar.markdown("---")
+    rnc_seleccionado = st.sidebar.selectbox("Empresa Activa", options=list(empresas_db.keys()), format_func=lambda x: f"{x} - {empresas_db[x]['razon_social']}")
+    
+    empresa_activa = empresas_db[rnc_seleccionado]
+    carpeta_activa = empresa_activa["carpeta"]
+    os.makedirs(carpeta_activa, exist_ok=True)
+    
+    st.info(f"📂 **Espacio de Trabajo Exclusivo:** `{empresa_activa['razon_social']}` (RNC: `{empresa_activa['rnc']}`)")
+    
+    # Navegación Modular Independiente para la empresa seleccionada
+    st.markdown("---")
+    modulo_activo = st.radio(
+        "Seleccione el Módulo de Operación Independiente",
+        ["📥 1. Ingesta y Carga de Soporte (606/607)", "📊 2. Reportes, Validación y Auditoría", "🔐 3. Credenciales y Bitácora OFV"],
+        horizontal=True
+    )
+    
+    periodo_sel = st.sidebar.text_input("Período Fiscal Activo (AAAAMM)", value="202610")
+    
+    # --- MÓDULO 1: INGESTA Y CARGA DE SOPORTE INDEPENDIENTE ---
+    if modulo_activo.startswith("📥"):
+        st.subheader(f"Módulo de Ingesta Independiente - {empresa_activa['razon_social']}")
+        st.markdown("Cargue los archivos de soporte (PDF, HTML o TXT) correspondientes **únicamente** a esta empresa.")
         
-        st.download_button(
-            label="📥 Descargar Formato 606 Consolidado (Excel)",
-            data=processed_data,
-            file_name=f"Formato_606_{periodo_sel}.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
-    else:
-        st.warning("No se detectaron registros válidos en el archivo o el período fiscal no coincide.")
+        archivo_subido = st.file_uploader("Cargar Soporte Documental", type=["pdf", "html", "txt"], key=f"uploader_{empresa_activa['rnc']}")
+        
+        if archivo_subido is not None:
+            bytes_data = archivo_subido.getvalue()
+            nombre_archivo = archivo_subido.name
+            
+            facturas_procesadas, incidencias_procesadas = procesar_buffer_facturas(nombre_archivo, bytes_data, periodo_sel)
+            
+            if facturas_procesadas:
+                df_facturas = pd.DataFrame(facturas_procesadas)
+                st.success(f"¡Se procesaron {len(df_facturas)} registros de manera independiente para esta empresa!")
+                st.dataframe(df_facturas)
+                
+                # Guardado segregado en la carpeta específica del RNC
+                archivo_historico = os.path.join(carpeta_activa, f"Formato_606_{periodo_sel}.xlsx")
+                with pd.ExcelWriter(archivo_historico, engine='openpyxl') as writer:
+                    df_facturas.to_excel(writer, index=False, sheet_name='Formato 606')
+                
+                with open(archivo_historico, "rb") as f:
+                    excel_bytes = f.read()
+                
+                st.download_button(
+                    label="📥 Descargar Formato 606 Consolidado de esta Empresa",
+                    data=excel_bytes,
+                    file_name=f"Formato_606_{empresa_activa['rnc']}_{periodo_sel}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            else:
+                st.warning("No se detectaron registros válidos en el archivo cargado.")
+
+    # --- MÓDULO 2: REPORTES Y AUDITORÍA INDEPENDIENTE ---
+    elif modulo_activo.startswith("📊"):
+        st.subheader(f"Reportes y Auditoría Independiente - {empresa_activa['razon_social']}")
+        st.markdown("Visualice los archivos y reportes generados exclusivamente en el historial de esta empresa.")
+        
+        # Listar archivos Excel guardados en la carpeta de la empresa
+        archivos_existentes = [f for f in os.listdir(carpeta_activa) if f.endswith('.xlsx')]
+        
+        if archivos_existentes:
+            archivo_elegido = st.selectbox("Seleccione Reporte Histórico", archivos_existentes)
+            ruta_reporte = os.path.join(carpeta_activa, archivo_elegido)
+            
+            df_reporte = pd.read_excel(ruta_reporte)
+            st.dataframe(df_reporte)
+            
+            # Métricas gerenciales independientes
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Total Facturas", len(df_reporte))
+            col2.metric("Monto Bruto Total", f"RD$ {df_reporte['MONTO BRUTO'].sum():,.2f}")
+            col3.metric("ITBIS Total", f"RD$ {df_reporte['MONTO FACTURADO EN ITBIS'].sum():,.2f}")
+            
+            with open(ruta_reporte, "rb") as f:
+                rep_bytes = f.read()
+            st.download_button(
+                label="📥 Descargar Reporte Seleccionado",
+                data=rep_bytes,
+                file_name=archivo_elegido,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+        else:
+            st.info("Aún no hay reportes generados para esta empresa en el período seleccionado. Utilice el módulo de ingesta para cargar soportes.")
+
+    # --- MÓDULO 3: CREDENCIALES Y ACCESO OFV ---
+    elif modulo_activo.startswith("🔐"):
+        st.subheader(f"Gestión de Credenciales OFV (DGII) - {empresa_activa['razon_social']}")
+        st.markdown("Control de accesos y clave de la Oficina Virtual vinculada a este RNC.")
+        
+        st.text_input("RNC Contribuyente", value=empresa_activa["rnc"], disabled=True)
+        st.text_input("Razón Social", value=empresa_activa["razon_social"], disabled=True)
+        st.text_input("Clave OFV Almacenada", value=empresa_activa["clave_ofv"], type="password", disabled=True)
+        st.success(f"Directorio de trabajo seguro: `{carpeta_activa}`")
+
+<ElicitationsGroup message="Para continuar ampliando las capacidades del ecosistema multiempresa:">
+  <Elicitation label="Agregar validación de cruces automáticos 606 vs 607 por cada empresa" query="Implementa un sub-módulo de cruces fiscales automáticos para comparar compras y ventas de forma independiente por empresa."/>
+  <Elicitation label="Crear funcionalidad de exportación masiva en ZIP para todos los reportes de las empresas" query="Añade un botón de exportación masiva para empaquetar en un archivo ZIP todos los reportes y carpetas de las empresas registradas."/>
+</ElicitationsGroup>
