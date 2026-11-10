@@ -1,0 +1,11 @@
+if periodo_factura != periodo_filtro:
+                            incidencias.append({**registro, "MOTIVO RECHAZO": f"Fuera de período ({periodo_factura})"})
+                        else:
+                            facturas.append(registro)
+        else:
+            pass
+            
+    except Exception as e:
+        print(f"Error procesando buffer: {e}")
+        
+    return facturas, incidencias
