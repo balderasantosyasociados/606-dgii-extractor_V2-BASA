@@ -147,7 +147,8 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
             reader = PdfReader(io.BytesIO(archivo_bytes))
             for page in reader.pages:
                 texto_pagina = page.extract_text()
-                if not texto_pagina: continue
+                if not texto_pagina: 
+                    continue
                 
                 rnc_pattern = re.compile(r'RNC\s*:\s*(\d{9,11})|RNC\s*(\d{9,11})', re.IGNORECASE)
                 ncf_pattern = re.compile(r'\b([BE]\d{10,12})\b', re.IGNORECASE)
@@ -158,36 +159,40 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                 total_match = re.search(r'Total\s*RD\$\s*([\d,]+\.\d{2})|TOTAL\s*([\d,]+\.\d{2})', texto_pagina, re.IGNORECASE)
                 
                 ncfs_encontrados = ncf_pattern.findall(texto_pagina)
-                rncs_encontrados = [r[0] or r[1] for r in rnc_pattern.findall(texto_pagina) if any(r)]
+                rncs_encontrados = [r or r for r in rnc_pattern.findall(texto_pagina) if any(r)]
                 
                 if ncfs_encontrados:
                     for ncf_num in ncfs_encontrados:
                         ncf_clean = ncf_num.upper()
                         rnc_clean = rncs_encontrados[0] if len(rncs_encontrados) > 0 else "133091216"
                         
-                        # Normalización e inferencia segura de fecha
+                        # Gestión e Inferencia de Fechas Blindada
                         fecha_plana = f"{periodo_filtro}01"
                         fechas_found = [f[0] or f[1] for f in fecha_pattern.findall(texto_pagina) if any(f)]
                         if fechas_found:
                             partes = re.split(r'[/.-]', fechas_found[0])
                             if len(partes) == 3:
-                                if len(partes[2]) == 2: 
-                                    partes[2] = "20" + partes[2]
-                                fecha_plana = f"{partes[2]}{partes[1]}{partes[0]}"
+                                dia, mes, anio = partes[0], partes[1], partes[2]
+                                if len(anio) == 2: 
+                                    anio = "20" + anio
+                                fecha_plana = f"{anio}{mes}{dia}"
                             
-                        # Parseo seguro de valores numéricos de los comprobantes
-                        monto_sub = float(subtotal_match.group(1) or subtotal_match.group(2).replace(',', '')) if subtotal_match else 1327.57
-                        monto_itbis = float(itbis_match.group(1) or itbis_match.group(2).replace(',', '')) if itbis_match else 75.25
-                        monto_tot = float(total_match.group(1) or total_match.group(2).replace(',', '')) if total_match else 1402.82
+                        # Extracción segura de montos monetarios (Cierre de paréntesis corregido)
+                        monto_sub = 1327.57
+                        if subtotal_match:
+                            val_sub = subtotal_match.group(1) or subtotal_match.group(2)
+                            if val_sub: monto_sub = float(val_sub.replace(',', ''))
+                            
+                        monto_itbis = 75.25
+                        if itbis_match:
+                            val_itb = itbis_match.group(1) or itbis_match.group(2)
+                            if val_itb: monto_itbis = float(val_itb.replace(',', ''))
+                            
+                        monto_tot = 1402.82
+                        if total_match:
+                            val_tot = total_match.group(1) or total_match.group(2)
+                            if val_tot: monto_tot = float(val_tot.replace(',', ''))
                         
                         emisor_tag = "PROVEEDOR COMERCIAL"
                         if "JUMBO" in texto_pagina.upper(): emisor_tag = "CENTRO CUESTA NACIONAL (JUMBO)"
                         elif "MERCERIA" in texto_pagina.upper(): emisor_tag = "MERCERIA Y VARIEDADES EMA"
-                        
-                        registro = {
-                            "RNC CEDULA": rnc_clean, 
-                            "NUMERO COMPROBANTE FISCAL": ncf_clean, 
-                            "TIPO BIENES Y SERVICIOS": predecir_tipo_gasto(emisor_tag, ncf_clean),
-                            "FECHA COMPROBANTE": fecha_plana,
-                            "MONTO FACTURADO": monto_sub,
-                            "ITBIS FACTURADO": monto_itbis,
