@@ -127,7 +127,7 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                 total_match = re.search(r'Total\s*RD\$\s*([\d,]+\.\d{2})|TOTAL\s*([\d,]+\.\d{2})', texto_pagina, re.IGNORECASE)
                 
                 ncfs_encontrados = ncf_pattern.findall(texto_pagina)
-                rncs_encontrados = [r or r for r in rnc_pattern.findall(texto_pagina) if r or r]
+                rncs_encontrados = [r[0] or r[1] for r in rnc_pattern.findall(texto_pagina) if any(r)]
                 
                 if ncfs_encontrados:
                     for ncf_num in ncfs_encontrados:
@@ -173,3 +173,42 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         else:
                             facturas.append(registro)
         else:
+            pass
+    except Exception as e:
+        st.error(f"Error procesando buffer: {e}")
+        
+    return facturas, incidencias
+
+# --- 4. INTERFAZ DE USUARIO STREAMLIT (BSA FISCAL INTELLIGENCE) ---
+st.title("⚖️ BSA Fiscal Solutions - Ecosistema de Auditoría e Ingesta Fiscal")
+st.markdown("Plataforma avanzada para la gestión, validación y procesamiento de archivos fiscales (606, 607 y Anexos DGII - República Dominicana).")
+
+periodo_sel = st.sidebar.text_input("Período Fiscal (AAAAMM)", value="202610")
+archivo_subido = st.file_uploader("Cargar Facturas en PDF o Reporte de la Oficina Virtual", type=["pdf", "html", "txt"])
+
+if archivo_subido is not None:
+    bytes_data = archivo_subido.getvalue()
+    nombre_archivo = archivo_subido.name
+    
+    st.info(f"Procesando archivo: {nombre_archivo}")
+    facturas_procesadas, incidencias_procesadas = procesar_buffer_facturas(nombre_archivo, bytes_data, periodo_sel)
+    
+    if facturas_procesadas:
+        df_facturas = pd.DataFrame(facturas_procesadas)
+        st.success(f"¡Se procesaron con éxito {len(df_facturas)} registros fiscales!")
+        st.dataframe(df_facturas)
+        
+        # Botón de exportación a Excel
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_facturas.to_excel(writer, index=False, sheet_name='Formato 606')
+        processed_data = output.getvalue()
+        
+        st.download_button(
+            label="📥 Descargar Formato 606 Consolidado (Excel)",
+            data=processed_data,
+            file_name=f"Formato_606_{periodo_sel}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    else:
+        st.warning("No se detectaron registros válidos en el archivo o el período fiscal no coincide.")
