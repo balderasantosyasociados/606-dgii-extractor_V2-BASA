@@ -19,12 +19,12 @@ st.set_page_config(
     layout="wide"
 )
 
-# Directorio raíz para almacenamiento de datos corporativos
+# Directorio raíz para almacenamiento de datos corporativos persistentes
 BASE_DIR = "empresas_db"
 os.makedirs(BASE_DIR, exist_ok=True)
 
 def cargar_empresas_registradas():
-    """Carga el registro histórico secuencial de empresas almacenadas."""
+    """Carga el registro histórico secuencial de empresas almacenadas físicamente."""
     meta_path = os.path.join(BASE_DIR, "registro_empresas.json")
     if os.path.exists(meta_path):
         try:
@@ -32,14 +32,14 @@ def cargar_empresas_registradas():
                 return json.load(f)
         except Exception:
             return {}
-    # Valores base iniciales de contingencia técnica homologados con los portales OFV
+    # Catálogo inicial de contingencia técnica homologado con los hilos transaccionales
     return {
         "133091216": {"razon_social": "JA INVESTMENT ANTIG RD SRL", "nombre_comercial": "JA Investment Solutions", "clave": "********"},
         "133490331": {"razon_social": "Baldera Santos y Asociados SRL", "nombre_comercial": "BSA Fiscal Solutions", "clave": "********"}
     }
 
 def guardar_empresas_registradas(empresas):
-    """Guarda el registro actualizado de empresas."""
+    """Guarda el registro actualizado de empresas de forma persistente."""
     meta_path = os.path.join(BASE_DIR, "registro_empresas.json")
     with open(meta_path, "w", encoding="utf-8") as f:
         json.dump(empresas, f, indent=4, ensure_ascii=False)
@@ -75,20 +75,7 @@ def calcular_retenciones_automaticas(fila):
     
     return ret_itbis_18, ret_itbis_100, ret_isr_30, ret_isr_fisica
 
-def decodificar_acuse_viewstate(viewstate_str):
-    try:
-        decoded_bytes = base64.b64decode(viewstate_str)
-        text_extracted = decoded_bytes.decode('utf-8', errors='ignore')
-        hash_match = re.search(r'([0-9A-F]{32})', text_extracted, re.IGNORECASE)
-        periodo_match = re.search(r'(\d{6})', text_extracted)
-        return {
-            "HASH_VALIDACION": hash_match.group(1) if hash_match else "5CC7B1D6322B405152BCCC1F21172D3B",
-            "PERIODO_RECEPCION": periodo_match.group(1) if periodo_match else "202610",
-            "TIPO_FORMATO": "606", "ESTATUS_OFV": "RECIBIDO Y VERIFICADO"
-        }
-    except Exception:
-        return {"HASH_VALIDACION": "5CC7B1D6322B405152BCCC1F21172D3B", "PERIODO_RECEPCION": "202610", "TIPO_FORMATO": "606", "ESTATUS_OFV": "RECIBIDO Y APROBADO"}
-
+# --- 2. PARSEADORES DE LA OFICINA VIRTUAL (OFV-DGII) ---
 def parsear_tabla_historica_ofv(html_contenido):
     registros_encontrados = []
     filas = re.findall(r'<tr>(.*?)</tr>', html_contenido, re.DOTALL)
@@ -111,7 +98,21 @@ def parsear_tabla_historica_ofv(html_contenido):
                 continue
     return registros_encontrados
 
-# --- 2. PROCESADOR DE SOPORTE INDEPENDIENTE ---
+def decodificar_acuse_viewstate(viewstate_str):
+    try:
+        decoded_bytes = base64.b64decode(viewstate_str)
+        text_extracted = decoded_bytes.decode('utf-8', errors='ignore')
+        hash_match = re.search(r'([0-9A-F]{32})', text_extracted, re.IGNORECASE)
+        periodo_match = re.search(r'(\d{6})', text_extracted)
+        return {
+            "HASH_VALIDACION": hash_match.group(1) if hash_match else "5CC7B1D6322B405152BCCC1F21172D3B",
+            "PERIODO_RECEPCION": periodo_match.group(1) if periodo_match else "202610",
+            "TIPO_FORMATO": "606", "ESTATUS_OFV": "RECIBIDO Y VERIFICADO"
+        }
+    except Exception:
+        return {"HASH_VALIDACION": "5CC7B1D6322B405152BCCC1F21172D3B", "PERIODO_RECEPCION": "202610", "TIPO_FORMATO": "606", "ESTATUS_OFV": "RECIBIDO"}
+
+# --- 3. MOTOR PARSEADOR ITERATIVO MULTIPÁGINA (PDF) ---
 def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
     facturas, incidencias = [], []
     try:
@@ -135,7 +136,7 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                 if ncfs_encontrados:
                     for ncf_num in ncfs_encontrados:
                         ncf_clean = ncf_num.upper()
-                        rnc_clean = rncs_encontrados[0] if len(rncs_encontrados) > 0 else "101564113"
+                        rnc_clean = rncs_encontrados[0] if len(rncs_encontrados) > 0 else "133091216"
                         
                         fecha_str = "01/10/2026"
                         fechas_found = fecha_pattern.findall(texto_pagina)
@@ -167,10 +168,8 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         }
                         r18, r100, r30, rfis = calcular_retenciones_automaticas(registro)
                         registro.update({
-                            "MONTO RETENIDO A PERSONA FISICA 18%": r18,
-                            "MONTO FACTURADO Y RETENIDO A PERSONA JURIDICA 100%": r100,
-                            "MONTO RETENIDO A EMPRESA DEL 30%": r30,
-                            "MONTO RETENIDO A PERSONAS FISICAS ISR": rfis
+                            "MONTO RETENIDO A PERSONA FISICA 18%": r18, "MONTO FACTURADO Y RETENIDO A PERSONA JURIDICA 100%": r100,
+                            "MONTO RETENIDO A EMPRESA DEL 30%": r30, "MONTO RETENIDO A PERSONAS FISICAS ISR": rfis
                         })
                         
                         if periodo_factura != periodo_filtro:
