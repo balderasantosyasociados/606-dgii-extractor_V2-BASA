@@ -23,25 +23,47 @@ st.set_page_config(
 BASE_DIR = "empresas_db"
 os.makedirs(BASE_DIR, exist_ok=True)
 
+# --- SISTEMA DE PERSISTENCIA Y AUTOSALVADO EN MEMORIA COMPARTIDA ---
+if "catalogo_empresas" not in st.session_state:
+    st.session_state.catalogo_empresas = {
+        "133091216": {"razon_social": "JA INVESTMENT ANTIG RD SRL", "nombre_comercial": "JA Investment Solutions", "clave": "********"},
+        "133490331": {"razon_social": "Baldera Santos y Asociados SRL", "nombre_comercial": "BSA Fiscal Solutions", "clave": "********"}
+    }
+
+if "empresa_activa_rnc" not in st.session_state:
+    st.session_state.empresa_activa_rnc = "133091216"
+
+if "db_validada" not in st.session_state: 
+    st.session_state.db_validada = []
+
+if "db_incidencias" not in st.session_state: 
+    st.session_state.db_incidencias = []
+
+
 def cargar_empresas_registradas():
     """Carga el registro histórico de empresas almacenadas físicamente."""
     meta_path = os.path.join(BASE_DIR, "registro_empresas.json")
     if os.path.exists(meta_path):
         try:
             with open(meta_path, "r", encoding="utf-8") as f:
-                return json.load(f)
+                data_cargada = json.load(f)
+                if data_cargada:
+                    st.session_state.catalogo_empresas.update(data_cargada)
         except Exception:
-            return {}
-    return {
-        "133091216": {"razon_social": "JA INVESTMENT ANTIG RD SRL", "nombre_comercial": "JA Investment Solutions", "clave": "********"},
-        "133490331": {"razon_social": "Baldera Santos y Asociados SRL", "nombre_comercial": "BSA Fiscal Solutions", "clave": "********"}
-    }
+            pass
 
-def guardar_empresas_registradas(empresas):
-    """Guarda el registro actualizado de empresas de forma pf."""
+def guardar_empresas_registradas():
+    """Guarda el registro actualizado de empresas de forma persistente."""
     meta_path = os.path.join(BASE_DIR, "registro_empresas.json")
-    with open(meta_path, "w", encoding="utf-8") as f:
-        json.dump(empresas, f, indent=4, ensure_ascii=False)
+    try:
+        with open(meta_path, "w", encoding="utf-8") as f:
+            json.dump(st.session_state.catalogo_empresas, f, indent=4, ensure_ascii=False)
+    except Exception as e:
+        st.error(f"Error al guardar persistencia local: {e}")
+
+# Ejecutar carga al iniciar el runtime
+cargar_empresas_registradas()
+
 
 # --- 1. MOTORES DE INFERENCIA FISCAL (REGLAS LOCALES DGII - RD) ---
 def predecir_tipo_gasto(emisor, ncf):
@@ -144,8 +166,8 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         
                         partes = re.split(r'[/.-]', fecha_str)
                         if len(partes) == 3:
-                            if len(partes[2]) == 2: partes[2] = "20" + partes[2]
-                            fecha_plana = f"{partes[2]}{partes[1]}{partes[0]}"
+                            if len(partes) == 2: partes = "20" + partes
+                            fecha_plana = f"{partes}{partes}{partes}"
                         else:
                             fecha_plana = "20261001"
                             
@@ -169,13 +191,3 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         r18, r100, r30, rfis = calcular_retenciones_automaticas(registro)
                         registro.update({
                             "MONTO RETENIDO A PERSONA FISICA 18%": r18, "MONTO FACTURADO Y RETENIDO A PERSONA JURIDICA 100%": r100,
-                            "MONTO RETENIDO A EMPRESA DEL 30%": r30, "MONTO RETENIDO A PERSONAS FISICAS ISR": rfis
-                        })
-                        
-                        if periodo_factura != periodo_filtro:
-                            incidencias.append({**registro, "MOTIVO RECHAZO": f"Fuera de período ({periodo_factura})"})
-                        else:
-                            facturas.append(registro)
-        else:
-            facturas.append({
-                "RNC CEDULA": "101019921", "NUMERO COMPROBANTE FISCAL": "E310010374911", "TIPO BIENES Y SERVICIOS": "02",
