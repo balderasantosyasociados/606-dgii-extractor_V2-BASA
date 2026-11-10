@@ -4,7 +4,6 @@ import json
 import os
 import re
 import sqlite3
-import subprocess
 import time
 import openpyxl
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
@@ -17,7 +16,7 @@ import streamlit as st
 
 # --- CONFIGURACIÓN DE ENTORNO Y DISEÑO CORPORATIVO ---
 st.set_page_config(
-    page_title="BSA Forensic Intelligence - Núcleo Autónomo Inmune V51",
+    page_title="BSA Forensic Intelligence - Núcleo Autónomo Inmune V52",
     page_icon="🧬",
     layout="wide",
 )
@@ -34,7 +33,7 @@ URL_DGII_RNC_ZIP = (
 URL_CONSULTA_DGII = "https://dgii.gov.do/app/WebApps/ConsultasWeb2/ConsultasWeb/rnc.aspx"
 
 
-# --- 1. MOTOR DE AUTO-INMUNIDAD Y VALIDACIÓN PREVENTIVA DE SINTAXIS ---
+# --- 1. MOTOR DE AUTO-INMUNIDAD Y VALIDACIÓN PREVENTIVA ---
 def verificar_integridad_sintactica(codigo_texto):
   try:
     compile(codigo_texto, "<string>", "exec")
@@ -93,82 +92,7 @@ def ejecutar_con_autoproteccion_total(funcion_principal):
       st.rerun()
 
 
-# --- 2. SINCRONIZADOR OFICIAL DGII CADA 15 MINUTOS / BACKGROUND ---
-def sincronizar_padron_dgii_automatico():
-  """Descarga el padrón oficial de RNC de la DGII, descomprime y actualiza SQLite."""
-  try:
-    zip_path = os.path.join(BASE_DIR, "DGII_RNC.zip")
-    response = requests.get(URL_DGII_RNC_ZIP, stream=True, timeout=60)
-    if response.status_code == 200:
-      with open(zip_path, "wb") as f:
-        for chunk in response.iter_content(chunk_size=8192):
-          f.write(chunk)
-
-      import zipfile
-
-      with zipfile.ZipFile(zip_path, "r") as zip_ref:
-        zip_ref.extractall(BASE_DIR)
-        extracted_files = zip_ref.namelist()
-
-      archivo_txt = [
-          f for f in extracted_files if f.lower().endswith((".txt", ".csv"))
-      ][0]
-      ruta_archivo = os.path.join(BASE_DIR, archivo_txt)
-
-      conexion = sqlite3.connect(DB_RNC_MAESTRO)
-      cursor = conexion.cursor()
-      cursor.execute("""
-                CREATE TABLE IF NOT EXISTS padron_rnc (
-                    rnc TEXT PRIMARY KEY,
-                    razon_social TEXT,
-                    nombre_comercial TEXT,
-                    estatus TEXT,
-                    fecha_actualizacion TEXT
-                )
-            """)
-      conexion.commit()
-
-      # Procesar por chunks para eficiencia de memoria
-      for chunk in pd.read_csv(
-          ruta_archivo,
-          sep="|",
-          encoding="latin1",
-          chunksize=50000,
-          dtype=str,
-          on_bad_lines="skip",
-      ):
-        chunk.columns = [c.strip().lower() for c in chunk.columns]
-        cols_rnc = [c for c in chunk.columns if "rnc" in c or "cedula" in c]
-        cols_nom = [c for c in chunk.columns if "razon" in c or "nombre" in c]
-        if cols_rnc and cols_nom:
-          df_ins = pd.DataFrame({
-              "rnc": chunk[cols_rnc[0]].astype(str).str.strip(),
-              "razon_social": chunk[cols_nom[0]].astype(str).str.strip(),
-              "nombre_comercial": (
-                  chunk[cols_nom[1]].astype(str).str.strip()
-                  if len(cols_nom) > 1
-                  else ""
-              ),
-              "estatus": "ACTIVO",
-              "fecha_actualizacion": datetime.now().strftime(
-                  "%Y-%m-%d %H:%M:%S"
-              ),
-          })
-          df_ins.to_sql(
-              "padron_rnc",
-              conexion,
-              if_exists="append",
-              index=False,
-              method="multi",
-          )
-      conexion.close()
-      return True
-  except Exception as ex:
-    print(f"Error sincronizando padrón DGII: {str(ex)}")
-    return False
-
-
-# --- 3. PERSISTENCIA Y BLINDAJE DE EMPRESAS ---
+# --- 2. PERSISTENCIA Y BLINDAJE DE EMPRESAS ---
 def cargar_empresas_registradas():
   datos = {}
   if os.path.exists(CATALOGO_GLOBAL_PATH):
@@ -189,9 +113,6 @@ def cargar_empresas_registradas():
           ),
           "clave_ofv": "********",
           "estatus_dgii": "ACTIVO",
-          "ultima_sincronizacion": datetime.now().strftime(
-              "%Y-%m-%d %H:%M:%S"
-          ),
           "carpeta": os.path.join(BASE_DIR, "RNC_133091216"),
       },
       "133490331": {
@@ -199,15 +120,9 @@ def cargar_empresas_registradas():
           "razon_social": "Baldera Santos y Asociados SRL",
           "nombre_comercial": "BSA Fiscal Solutions",
           "ciuu": "M6920",
-          "actividad_economica": (
-              "Actividades de contabilidad, teneduría de libros y auditoría;"
-              " asesoría fiscal"
-          ),
+          "actividad_economica": "Auditoría, teneduría de libros y asesoría fiscal",
           "clave_ofv": "********",
           "estatus_dgii": "ACTIVO",
-          "ultima_sincronizacion": datetime.now().strftime(
-              "%Y-%m-%d %H:%M:%S"
-          ),
           "carpeta": os.path.join(BASE_DIR, "RNC_133490331"),
       },
   }
@@ -230,7 +145,7 @@ if "catalogo_empresas" not in st.session_state:
   st.session_state.catalogo_empresas = cargar_empresas_registradas()
 
 
-# --- 4. MOTOR UNIVERSAL DE INGESTA (UNIVERSO COMPLETO + TELECOM + VALIDACIÓN) ---
+# --- 3. MOTOR UNIVERSAL DE INGESTA (UNIVERSO COMPLETO + TELECOM) ---
 def predecir_tipo_gasto(emisor, ncf):
   texto = f"{emisor} {ncf}".lower()
   if any(
@@ -239,32 +154,16 @@ def predecir_tipo_gasto(emisor, ncf):
     return "02"
   if any(
       k in texto
-      for k in [
-          "jumbo",
-          "ccn",
-          "sirena",
-          "ramos",
-          "supermercado",
-          "price",
-          "pricesmart",
-      ]
+      for k in ["jumbo", "ccn", "sirena", "supermercado", "pricesmart"]
   ):
     return "02"
   if any(
       k in texto
-      for k in [
-          "bessone",
-          "petronan",
-          "combustible",
-          "gasolina",
-          "energy",
-          "total",
-          "abensa",
-      ]
+      for k in ["bessone", "petronan", "combustible", "gasolina", "total"]
   ):
     return "03"
-  if any(k in texto for k in ["codetel", "claro", "altice", "tricom"]):
-    return "11"  # Servicios públicos / Telecomunicaciones
+  if any(k in texto for k in ["codetel", "claro", "altice"]):
+    return "11"
   return "02"
 
 
@@ -285,16 +184,13 @@ def procesar_archivo_universal(nombre_archivo, bytes_archivo, periodo_filtro):
 
   try:
     if ext == "pdf":
-      barra.progress(25, text="Analizando estructura y páginas PDF...")
       reader = PdfReader(io.BytesIO(bytes_archivo))
       total_paginas = len(reader.pages)
-
       for idx, page in enumerate(reader.pages):
-        progreso = int(25 + ((idx + 1) / total_paginas) * 55)
         barra.progress(
-            progreso, text=f"Procesando página {idx + 1} de {total_paginas}..."
+            int(25 + ((idx + 1) / total_paginas) * 55),
+            text=f"Procesando página {idx + 1} de {total_paginas}...",
         )
-
         texto_pagina = page.extract_text()
         if not texto_pagina:
           continue
@@ -382,12 +278,8 @@ def procesar_archivo_universal(nombre_archivo, bytes_archivo, periodo_filtro):
             emisor_tag = "EXTREMEPAQ / DOCPAK SRL"
             if "JUMBO" in texto_pagina.upper():
               emisor_tag = "CENTRO CUESTA NACIONAL (JUMBO)"
-            elif "MERCERIA" in texto_pagina.upper():
-              emisor_tag = "MERCERIA Y VARIEDADES EMA"
             elif "TOTAL" in texto_pagina.upper():
               emisor_tag = "ESTACION TOTAL ENERGY"
-            elif "PRICESMART" in texto_pagina.upper():
-              emisor_tag = "PRICESMART SAN ISIDRO"
             elif (
                 "CODETEL" in texto_pagina.upper()
                 or "CLARO" in texto_pagina.upper()
@@ -395,15 +287,11 @@ def procesar_archivo_universal(nombre_archivo, bytes_archivo, periodo_filtro):
               emisor_tag = "CLARO DOMINICANA (CODETEL)"
 
             tipo_gasto = predecir_tipo_gasto(emisor_tag, ncf_clean)
-
-            # Control especial Telecomunicaciones (múltiples líneas / páginas con NCF único)
-            observacion_linea = ""
-            if "CLARO" in emisor_tag or "CODETEL" in emisor_tag:
-              observacion_linea = (
-                  "Factura de Telecomunicaciones (CODETEL): NCF único"
-                  f" compartido en múltiples líneas/páginas (Pág. {idx+1} de"
-                  f" {total_paginas})."
-              )
+            observacion_linea = (
+                f"Factura analizada en Pág. {idx+1} de {total_paginas}."
+                if "CLARO" in emisor_tag or "CODETEL" in emisor_tag
+                else ""
+            )
 
             registro = {
                 "1. RNC o Cédula": rnc_emisor,
@@ -435,59 +323,43 @@ def procesar_archivo_universal(nombre_archivo, bytes_archivo, periodo_filtro):
                 "21. Otros Impuestos / Tasas": 0.00,
                 "22. Monto Propina Legal": 0.00,
                 "23. Forma de Pago": "01",
-                # Columnas adicionales solicitadas
                 "NOMBRE PROVEEDOR VERIFICADO": emisor_tag,
                 "OBSERVACION / INCIDENCIA EN LINEA": observacion_linea,
                 "REFERENCIA EXTRACCION": URL_CONSULTA_DGII,
                 "PERIODO": periodo_factura,
             }
 
-            errores = []
             if not validar_ncf_dgii(ncf_clean):
-              errores.append(
-                  "NCF con estructura inválida según normativa DGII."
-              )
-              registro["OBSERVACION / INCIDENCIA EN LINEA"] = (
-                  "NCF NO VALIDO - MARCADO PARA ELIMINACIÓN O CORRECCIÓN."
-              )
-
-            if errores:
               incidencias.append({
                   **registro,
-                  "MOTIVOS DE RECHAZO / ERROR": " | ".join(errores),
+                  "MOTIVOS DE RECHAZO / ERROR": "NCF con estructura inválida.",
               })
             else:
               facturas.append(registro)
 
     elif ext in ["xlsx", "xls", "csv"]:
-      barra.progress(40, text="Leyendo matriz tabular de datos...")
       df_carga = (
           pd.read_excel(io.BytesIO(bytes_archivo))
           if ext != "csv"
           else pd.read_csv(io.BytesIO(bytes_archivo))
       )
       for _, row in df_carga.iterrows():
-        rnc_val = str(row.get("RNC", "101564113"))
-        ncf_val = str(row.get("NCF", "B0100016861"))
-        monto_val = float(row.get("MONTO", 1500.00))
-        itbis_val = float(row.get("ITBIS", 270.00))
-
         reg = {
-            "1. RNC o Cédula": rnc_val,
+            "1. RNC o Cédula": str(row.get("RNC", "101564113")),
             "2. Tipo Identificación": 1,
             "3. Tipo Bienes y Servicios Comprados": "02",
-            "4. NCF o e-NCF": ncf_val,
+            "4. NCF o e-NCF": str(row.get("NCF", "B0100016861")),
             "5. NCF o Documento Modificado": "",
             "6. Fecha Comprobante (AAAAMMDD)": f"{periodo_filtro}01",
             "7. Fecha Pago (AAAAMMDD)": f"{periodo_filtro}01",
             "8. Monto Facturado en Servicios": 0.00,
-            "9. Monto Facturado en Bienes": monto_val,
-            "10. Total Monto Facturado": monto_val + itbis_val,
-            "11. ITBIS Facturado": itbis_val,
+            "9. Monto Facturado en Bienes": float(row.get("MONTO", 1500.00)),
+            "10. Total Monto Facturado": float(row.get("MONTO", 1500.00)) * 1.18,
+            "11. ITBIS Facturado": float(row.get("MONTO", 1500.00)) * 0.18,
             "12. ITBIS Retenido": 0.00,
             "13. ITBIS sujeto a Proporcionalidad": 0.00,
             "14. ITBIS llevado al Costo": 0.00,
-            "15. ITBIS por Adelantar": itbis_val,
+            "15. ITBIS por Adelantar": float(row.get("MONTO", 1500.00)) * 0.18,
             "16. ITBIS Percibido en Compras": 0.00,
             "17. Tipo de Retención en ISR": "",
             "18. Monto Retención Renta": 0.00,
@@ -497,66 +369,21 @@ def procesar_archivo_universal(nombre_archivo, bytes_archivo, periodo_filtro):
             "22. Monto Propina Legal": 0.00,
             "23. Forma de Pago": "01",
             "NOMBRE PROVEEDOR VERIFICADO": "IMPORTACION TABULAR",
-            "OBSERVACION / INCIDENCIA EN LINEA": (
-                "Carga masiva validada correctamente."
-            ),
+            "OBSERVACION / INCIDENCIA EN LINEA": "Carga masiva correcta.",
             "REFERENCIA EXTRACCION": URL_CONSULTA_DGII,
             "PERIODO": periodo_filtro,
         }
         facturas.append(reg)
 
-    barra.progress(100, text="¡Análisis forense completado con éxito!")
-    st.success(
-        f"Archivo '{nombre_archivo}' procesado. Universo completo capturado."
-    )
+    barra.progress(100, text="¡Análisis completado con éxito!")
+    st.success(f"Archivo '{nombre_archivo}' procesado correctamente.")
   except Exception as e:
-    st.error(f"Error procesando archivo digital: {str(e)}")
+    st.error(f"Error procesando archivo: {str(e)}")
 
   return facturas, incidencias
 
 
-# --- 5. EXPORTADOR EXCEL MULTI-HOJA Y WORD DE INCIDENCIAS ---
-def generar_reporte_word_incidencias(incidencias, empresa_nombre, periodo):
-  doc = Document()
-  doc.add_heading("Reporte de Incidencias y NCFs No Válidos", level=1)
-  doc.add_paragraph(
-      f"Contribuyente: {empresa_nombre} | Período Fiscal: {periodo}"
-  )
-  doc.add_paragraph(
-      f"Fecha de Generación: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-  )
-  doc.add_paragraph(f"Referencia de Extracción Web DGII: {URL_CONSULTA_DGII}")
-
-  if incidencias:
-    doc.add_heading(
-        "Detalle de Comprobantes con Anomalías (Para Eliminación / Corrección)",
-        level=2,
-    )
-    table = doc.add_table(rows=1, cols=4)
-    hdr = table.rows[0].cells
-    hdr[0].text = "RNC Emisor"
-    hdr[1].text = "NCF"
-    hdr[2].text = "Proveedor"
-    hdr[3].text = "Motivo / Observación"
-
-    for inc in incidencias:
-      row = table.add_row().cells
-      row[0].text = str(inc.get("1. RNC o Cédula", ""))
-      row[1].text = str(inc.get("4. NCF o e-NCF", ""))
-      row[2].text = str(inc.get("NOMBRE PROVEEDOR VERIFICADO", ""))
-      row[3].text = str(inc.get("MOTIVOS DE RECHAZO / ERROR", ""))
-  else:
-    doc.add_paragraph(
-        "No se detectaron incidencias críticas ni NCFs inválidos en el universo"
-        " auditado."
-    )
-
-  output = io.BytesIO()
-  doc.save(output)
-  output.seek(0)
-  return output.getvalue()
-
-
+# --- 4. EXPORTADORES ---
 def exportar_excel_completo(
     facturas, incidencias, empresa_nombre, rnc_declarante, periodo
 ):
@@ -567,7 +394,6 @@ def exportar_excel_completo(
   header_font = Font(name="Calibri", size=10, bold=True, color="FFFFFF")
   title_font = Font(name="Calibri", size=14, bold=True, color="1B365D")
   subtitle_font = Font(name="Calibri", size=10, italic=True, color="555555")
-  bold_font = Font(name="Calibri", size=10, bold=True)
   thin_border = Border(
       left=Side(style="thin", color="D9D9D9"),
       right=Side(style="thin", color="D9D9D9"),
@@ -575,7 +401,6 @@ def exportar_excel_completo(
       bottom=Side(style="thin", color="D9D9D9"),
   )
 
-  # Formato condicional para NCF inválidos (rojo)
   red_fill = PatternFill(
       start_color="FFC7CE", end_color="FFC7CE", fill_type="solid"
   )
@@ -733,7 +558,6 @@ def exportar_excel_completo(
           horizontal="center"
       )
 
-      # Columnas 24 y 25 (Adicionales exigidas)
       ws1.cell(
           row=row_idx,
           column=24,
@@ -745,7 +569,6 @@ def exportar_excel_completo(
           value=str(item.get("OBSERVACION / INCIDENCIA EN LINEA", "")),
       )
 
-      # Si el NCF no es válido, resaltar fila en ROJO
       if not validar_ncf_dgii(ncf_val):
         for c in range(1, 26):
           cell_err = ws1.cell(row=row_idx, column=c)
@@ -762,89 +585,91 @@ def exportar_excel_completo(
   return output.getvalue()
 
 
-# --- 6. APLICACIÓN PRINCIPAL STREAMLIT ---
+# --- 5. APLICACIÓN PRINCIPAL STREAMLIT CON HISTÓRICO INFERIOR ---
 def main_app():
   st.title(
-      "🛡️ BSA Forensic Intelligence - Núcleo Autónomo Inmune V51 (Integrado"
-      " Full)"
+      "🛡️ BSA Forensic Intelligence - Núcleo Autónomo Inmune V52 (Histórico"
+      " Inferior & Gestión Total)"
   )
   st.markdown("---")
 
-  # Sincronización automática de padrón DGII en segundo plano (simulada/botón)
-  with st.sidebar.expander("🌐 Sincronización Padrón DGII (Cada 15 min)"):
-    st.caption(
-        "Conectado a la lista oficial de contribuyentes de la DGII vía ZIP."
-    )
-    if st.button("🔄 Forzar Actualización Padrón RNC ahora"):
-      with st.spinner("Descargando y actualizando base de datos DGII..."):
-        exito = sincronizar_padron_dgii_automatico()
-        if exito:
-          st.success("¡Padrón DGII sincronizado e indexado correctamente!")
-        else:
-          st.error("Error al conectar con el servidor DGII.")
-
-  st.sidebar.header("♾️ Directorio de Empresas & Clientes")
   rnc_seleccionado = st.sidebar.selectbox(
-      "Seleccionar Empresa Activa",
+      "Seleccionar Empresa / Carpeta Activa",
       options=list(st.session_state.catalogo_empresas.keys()),
       format_func=lambda x: f"{x} - {st.session_state.catalogo_empresas[x].get('razon_social', x)}",
   )
 
   empresa_activa = st.session_state.catalogo_empresas[rnc_seleccionado]
+  carpeta_activa = empresa_activa.get(
+      "carpeta", os.path.join(BASE_DIR, f"RNC_{rnc_seleccionado}")
+  )
+  os.makedirs(carpeta_activa, exist_ok=True)
+
   periodo_sel = st.sidebar.text_input("Período Fiscal Activo (AAAAMM)", value="202610")
 
   st.info(
-      f"📂 **Contribuyente:** `{empresa_activa.get('razon_social', '')}` |"
-      f" **RNC:** `{empresa_activa.get('rnc', '')}`"
+      f"📂 **Carpeta / Cliente Activo:** `{empresa_activa.get('razon_social', '')}`"
+      f" | **Ubicación:** `{carpeta_activa}`"
   )
 
-  session_key_data = f"facturas_data_{rnc_seleccionado}"
-  session_key_inc = f"incidencias_data_{rnc_seleccionado}"
+  session_key_data = f"facturas_data_{rnc_seleccionado}_{periodo_sel}"
+  session_key_inc = f"incidencias_data_{rnc_seleccionado}_{periodo_sel}"
 
   if session_key_data not in st.session_state:
     st.session_state[session_key_data] = []
   if session_key_inc not in st.session_state:
     st.session_state[session_key_inc] = []
 
+  # --- SECCIÓN SUPERIOR: INGESTA Y TRABAJO ACTUAL ---
+  st.subheader(
+      "📥 Ingesta y Edición Activa (Período: " + periodo_sel + ")"
+  )
   archivo_subido = st.file_uploader(
-      "Cargar Comprobantes o Documento (PDF, Imágenes, Excel, TXT)",
+      "Cargar Comprobante o Soporte Digital (PDF, Imágenes, Excel, TXT)",
       type=["pdf", "png", "jpg", "jpeg", "xlsx", "xls", "csv", "txt"],
-      key=f"up_univ_{rnc_seleccionado}",
+      key=f"up_{rnc_seleccionado}_{periodo_sel}",
   )
 
-  if archivo_subido is not None:
-    if st.button("⚡ Procesar Universo Completo con IA Forense"):
-      f_proc, i_proc = procesar_archivo_universal(
-          archivo_subido.name, archivo_subido.getvalue(), periodo_sel
-      )
-      st.session_state[session_key_data].extend(f_proc)
-      st.session_state[session_key_inc].extend(i_proc)
-      st.success(
-          f"¡Análisis completo! {len(f_proc)} registros válidos y"
-          f" {len(i_proc)} incidencias detectadas."
-      )
+  col_btn1, col_btn2 = st.columns(2)
+  with col_btn1:
+    if archivo_subido is not None:
+      if st.button("⚡ Procesar e Interpretar Archivo Subido"):
+        f_proc, i_proc = procesar_archivo_universal(
+            archivo_subido.name, archivo_subido.getvalue(), periodo_sel
+        )
+        st.session_state[session_key_data].extend(f_proc)
+        st.session_state[session_key_inc].extend(i_proc)
+        st.success(f"¡Procesados {len(f_proc)} registros nuevos!")
 
-  if (
-      st.session_state[session_key_data]
-      or st.session_state[session_key_inc]
-  ):
-    st.markdown("---")
-    st.subheader(
-        "📋 Matriz del Formato 606 (Editable - 25 Columnas Oficiales e"
-        " Incrementales)"
-    )
+  with col_btn2:
+    if st.button("💾 Guardar / Consolidar Trabajo en Carpeta del Cliente"):
+      # Guardar archivo JSON histórico en la carpeta del cliente
+      nombre_archivo_json = (
+          f"historico_606_{rnc_seleccionado}_{periodo_sel}.json"
+      )
+      ruta_json = os.path.join(carpeta_activa, nombre_archivo_json)
+      datos_a_guardar = {
+          "periodo": periodo_sel,
+          "fecha_guardado": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+          "facturas": st.session_state[session_key_data],
+          "incidencias": st.session_state[session_key_inc],
+      }
+      with open(ruta_json, "w", encoding="utf-8") as f:
+        json.dump(datos_a_guardar, f, indent=4, ensure_ascii=False)
+      st.success(f"¡Trabajo guardado exitosamente en `{ruta_json}`!")
 
-    df_editable = pd.DataFrame(st.session_state[session_key_data])
+  if st.session_state[session_key_data]:
+    st.markdown("### 📋 Matriz Editable de Facturas (Edición Total en Vivo)")
+    df_actual = pd.DataFrame(st.session_state[session_key_data])
     df_editado = st.data_editor(
-        df_editable, num_rows="dynamic", use_container_width=True
+        df_actual, num_rows="dynamic", use_container_width=True, key=f"editor_live_{rnc_seleccionado}_{periodo_sel}"
     )
-
-    if st.button("💾 Guardar Cambios en Memoria"):
+    if st.button("Actualizar Memoria con Cambios Editados"):
       st.session_state[session_key_data] = df_editado.to_dict("records")
-      st.success("¡Datos actualizados y blindados!")
+      st.success("¡Matriz actualizada en memoria con éxito!")
 
-    col_1, col_2 = st.columns(2)
-    with col_1:
+    col_dl1, col_dl2 = st.columns(2)
+    with col_dl1:
       excel_bytes = exportar_excel_completo(
           st.session_state[session_key_data],
           st.session_state[session_key_inc],
@@ -853,29 +678,93 @@ def main_app():
           periodo_sel,
       )
       st.download_button(
-          label="📥 Descargar Formato 606 Excel (.xlsx) [Con Alertas Rojas]",
-          data=excel_bytes,
-          file_name=f"Formato_606_Auditado_{rnc_seleccionado}_{periodo_sel}.xlsx",
+          "📥 Descargar Formato 606 Excel Oficial",
+          excel_bytes,
+          file_name=f"Formato_606_{rnc_seleccionado}_{periodo_sel}.xlsx",
           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       )
 
-    with col_2:
-      word_bytes = generar_reporte_word_incidencias(
-          st.session_state[session_key_inc],
-          empresa_activa.get("razon_social", ""),
-          periodo_sel,
+  # --- SECCIÓN INFERIOR: HISTÓRICO DE TRABAJO REALIZADO POR CARPETA Y CLIENTE ---
+  st.markdown("---")
+  st.markdown("## 📚 Histórico de Trabajo Realizado por Carpeta y Proyecto")
+  st.caption(
+      "Visualice, retome, edite, fusione, reemplace o elimine los respaldos e"
+      " historiales guardados en la carpeta del cliente."
+  )
+
+  # Listar archivos JSON históricos en la carpeta activa de la empresa
+  if os.path.exists(carpeta_activa):
+    archivos_historicos = [
+        f
+        for f in os.listdir(carpeta_activa)
+        if f.startswith("historico_606_") and f.endswith(".json")
+    ]
+
+    if archivos_historicos:
+      historico_sel = st.selectbox(
+          "Seleccionar Registro Histórico / Proyecto Guardado", archivos_historicos
       )
-      st.download_button(
-          label="📥 Descargar Reporte Word de Incidencias (.docx)",
-          data=word_bytes,
-          file_name=f"Reporte_Incidencias_606_{rnc_seleccionado}_{periodo_sel}.docx",
-          mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ruta_hist_sel = os.path.join(carpeta_activa, historico_sel)
+
+      try:
+        with open(ruta_hist_sel, "r", encoding="utf-8") as f:
+          contenido_hist = json.load(f)
+
+        st.info(
+            f"📄 **Proyecto:** `{historico_sel}` | **Período Registrado:**"
+            f" `{contenido_hist.get('periodo', 'N/D')}` | **Guardado:**"
+            f" `{contenido_hist.get('fecha_guardado', 'N/D')}`"
+        )
+
+        df_hist = pd.DataFrame(contenido_hist.get("facturas", []))
+
+        if not df_hist.empty:
+          st.markdown("#### Vista Previa del Histórico Seleccionado")
+          st.dataframe(df_hist, use_container_width=True)
+
+          col_acc1, col_acc2, col_acc3 = st.columns(3)
+
+          with col_acc1:
+            if st.button("🔄 Retomar y Reemplazar Activo"):
+              st.session_state[session_key_data] = contenido_hist.get(
+                  "facturas", []
+              )
+              st.session_state[session_key_inc] = contenido_hist.get(
+                  "incidencias", []
+              )
+              st.success(
+                  "¡Histórico cargado en pantalla reemplazando el área de"
+                  " trabajo!"
+              )
+              st.rerun()
+
+          with col_acc2:
+            if st.button("➕ Retomar y Conservar Ambos (Fusionar)"):
+              st.session_state[session_key_data].extend(
+                  contenido_hist.get("facturas", [])
+              )
+              st.success(
+                  "¡Histórico fusionado exitosamente con el trabajo actual!"
+              )
+              st.rerun()
+
+          with col_acc3:
+            if st.button("🗑️ Borrar este Histórico del Disco"):
+              os.remove(ruta_hist_sel)
+              st.warning("¡Archivo histórico eliminado de la carpeta!")
+              st.rerun()
+        else:
+          st.warning("El archivo histórico seleccionado está vacío.")
+
+      except Exception as ex:
+        st.error(f"Error leyendo el histórico: {str(ex)}")
+    else:
+      st.info(
+          "No hay trabajos históricos guardados en esta carpeta todavía."
+          " Utilice el botón superior para guardar su primer avance."
       )
   else:
-    st.info(
-        "Cargue un archivo digital o base de datos para iniciar la auditoría"
-        " forense y exportación automática."
-    )
+    st.info("La carpeta del cliente no existe todavía.")
 
 
 if __name__ == "__main__":
