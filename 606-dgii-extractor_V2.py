@@ -38,6 +38,8 @@ def autoevaluar_y_reparar_entorno():
             except Exception as e:
                 st.error(f"Aviso de ejecución: {str(e)}")
 
+autoevaluar_y_reparar_entorno()
+
 # --- SISTEMA DE PERSISTENCIA FISCAL EN MEMORIA COMPARTIDA ---
 if "catalogo_empresas" not in st.session_state:
     st.session_state.catalogo_empresas = {
@@ -160,7 +162,7 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                 total_match = re.search(r'Total\s*RD\$\s*([\d,]+\.\d{2})|TOTAL\s*([\d,]+\.\d{2})', texto_pagina, re.IGNORECASE)
                 
                 ncfs_encontrados = ncf_pattern.findall(texto_pagina)
-                rncs_encontrados = [r or r for r in rnc_pattern.findall(texto_pagina) if any(r)]
+                rncs_encontrados = [r[0] or r[1] for r in rnc_pattern.findall(texto_pagina) if any(r)]
                 
                 if ncfs_encontrados:
                     for ncf_num in ncfs_encontrados:
@@ -180,7 +182,6 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         else:
                             fecha_plana = f"{periodo_filtro}01"
                             
-                        periodo_factura = fecha_plana[:6]
                         monto_sub = float(str(subtotal_match.group(1) or subtotal_match.group(2)).replace(',', '')) if subtotal_match else 1327.57
                         monto_itbis = float(str(itbis_match.group(1) or itbis_match.group(2)).replace(',', '')) if itbis_match else 75.25
                         monto_tot = float(str(total_match.group(1) or total_match.group(2)).replace(',', '')) if total_match else 1402.82
@@ -191,9 +192,20 @@ def procesar_buffer_facturas(archivo_nombre, archivo_bytes, periodo_filtro):
                         elif "MERCERIA" in texto_pagina.upper(): 
                             emisor_tag = "MERCERIA Y VARIEDADES EMA"
                         
-                        es_serv = "DOCPAK" in emisor_tag or "AEROMENSAJERIA" in emisor_tag
-                        
                         registro = {
                             "RNC CEDULA": rnc_clean, 
                             "NUMERO COMPROBANTE FISCAL": ncf_clean, 
                             "TIPO BIENES Y SERVICIOS": predecir_tipo_gasto(emisor_tag, ncf_clean),
+                            "MONTO BRUTO": monto_sub,
+                            "MONTO FACTURADO EN ITBIS": monto_itbis,
+                            "MONTO TOTAL": monto_tot
+                        }
+                        facturas.append(registro)
+    except Exception as e:
+        incidencias.append(f"Error procesando {archivo_nombre}: {str(e)}")
+        
+    return facturas, incidencias
+
+# Interfaz principal de control
+st.title("⚖️ BSA Forensic Intelligence - Módulo 606 DGII")
+st.markdown
